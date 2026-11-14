@@ -121,17 +121,27 @@ class CatBrainTest {
             var played = false
             var batted = false
             var t = 0f
+            var lastAnim = b.anim
+            var sinceChange = 0f
+            var quickChanges = 0
             b.run(40f) {
                 t += 1f / 60f
                 val ball = it.ball!!
                 assertInBounds(it)
                 assertTrue(ball.x in 0f..(w - ball.d) && ball.y in 0f..(floor - ball.d), "ball out of bounds")
                 if (it.state == CatBrain.State.PLAY) played = true
+                sinceChange += 1f / 60f
+                if (it.anim != lastAnim) {
+                    if (sinceChange < 0.15f) quickChanges++
+                    lastAnim = it.anim
+                    sinceChange = 0f
+                }
                 // after the initial drop has settled, the ball only leaves the floor if she bats it
                 if (t > 5f && ball.y < floor - ball.d - size) batted = true
             }
             assertTrue(played, "seed $seed never played")
             assertTrue(batted, "seed $seed never batted the ball")
+            assertTrue(quickChanges <= 2, "seed $seed flickered between poses $quickChanges times in 40s")
             b.takeBall()
             b.run(3f)
             assertTrue(b.state != CatBrain.State.PLAY)

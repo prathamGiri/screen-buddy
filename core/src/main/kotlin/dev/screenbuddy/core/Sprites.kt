@@ -12,6 +12,8 @@ enum class Anim(val frames: Int, val fps: Float) {
     PET(2, 3f),
     SLEEP(4, 1.5f),
     DRAG(2, 5f),
+    WATCH(2, 2.5f),
+    SWAT(2, 8f),
 }
 
 object Sprites {
@@ -113,6 +115,14 @@ object Sprites {
                 side(g, legs = i, tail = if (anim == Anim.RUN) 1 else i / 2, bob = if (anim == Anim.RUN && i % 2 == 1) -1 else 0)
                 g.outline()
             }
+            Anim.WATCH -> {
+                side(g, legs = 6, tail = i, bob = 0)
+                g.outline()
+            }
+            Anim.SWAT -> {
+                side(g, legs = 7 + i, tail = 0, bob = 0)
+                g.outline()
+            }
             Anim.JUMP -> {
                 side(g, legs = 4, tail = 1, bob = -2)
                 g.outline()
@@ -207,7 +217,7 @@ object Sprites {
         head(g, 8, 9, eyes)
     }
 
-    /** Standing side-on, facing right. legs 0..3 walk cycle, 4 leaping, 5 falling. */
+    /** Side-on, facing right. legs 0..3 walk cycle, 4 leaping, 5 falling, 6 standing, 7..8 batting. */
     private fun side(g: Grid, legs: Int, tail: Int, bob: Int, eyes: Eyes = Eyes.OPEN) {
         val b = bob
         // tail
@@ -229,6 +239,14 @@ object Sprites {
             1 -> { leg(9, 0, 2, true); leg(18, 0, 2, true); leg(7, 0, 0, false); leg(16, 0, 0, false) }
             2 -> { leg(9, 1, 0, true); leg(18, -1, 0, true); leg(7, -2, 0, false); leg(16, 2, 0, false) }
             3 -> { leg(9, 0, 0, true); leg(18, 0, 0, true); leg(7, 0, 2, false); leg(16, 0, 2, false) }
+            6 -> { leg(9, 0, 0, true); leg(18, 0, 0, true); leg(7, 0, 0, false); leg(16, 0, 0, false) }
+            7, 8 -> {
+                // standing on three legs with the near front paw reaching out
+                leg(9, 0, 0, true); leg(18, 0, 0, true); leg(7, 0, 0, false)
+                val up = if (legs == 7) 0 else 2
+                g.rect(20, 21 + up, 25, 22 + up, FUR)
+                g.rect(25, 20 + up, 26, 21 + up, CREAM)
+            }
             4 -> {
                 // stretched out mid-leap
                 g.rect(2, 23 + b, 7, 24 + b, FUR); g.rect(1, 24 + b, 2, 25 + b, CREAM)

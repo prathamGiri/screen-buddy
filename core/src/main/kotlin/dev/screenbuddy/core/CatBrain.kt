@@ -46,6 +46,8 @@ class CatBrain(
     private var playLeft = 0f
     private var swatCooldown = 0f
     private var playMoving = false
+    private var poseHold = 0f
+    private var swatTime = 0f
 
     private var vx = 0f
     private var vy = 0f
@@ -67,7 +69,7 @@ class CatBrain(
             State.WALK -> Anim.WALK
             State.ALERT -> Anim.ALERT
             State.CHASE -> Anim.RUN
-            State.PLAY -> if (playMoving) Anim.RUN else Anim.IDLE
+            State.PLAY -> if (swatTime > 0f) Anim.SWAT else if (playMoving) Anim.RUN else Anim.WATCH
             State.AIR -> if (vy < 0f) Anim.JUMP else Anim.FALL
             State.LAND -> Anim.LAND
             State.PET -> Anim.PET
@@ -147,7 +149,7 @@ class CatBrain(
         when (state) {
             State.IDLE -> if (stateTime >= stateDur) {
                 when {
-                    ball != null && playLeft > 0f -> enter(State.PLAY)
+                    ball != null && playLeft > 0f -> startPlay()
                     quietTime > 40f && rng.nextFloat() < 0.5f -> enter(State.SLEEP, 40f + rng.nextFloat() * 80f)
                     rng.nextFloat() < 0.65f -> {
                         walkTo = rng.nextFloat() * maxX
@@ -165,7 +167,7 @@ class CatBrain(
                         vy = -sqrt(2f * gravity * h)
                         enterAir()
                     }
-                    ball != null && playLeft > 0f -> enter(State.PLAY)
+                    ball != null && playLeft > 0f -> startPlay()
                     hasTarget && chaseEnabled -> enter(State.CHASE)
                     else -> enter(State.IDLE)
                 }
@@ -174,7 +176,7 @@ class CatBrain(
             State.CHASE -> chase(dt)
             State.AIR -> fly(dt)
             State.LAND -> if (stateTime >= 0.25f) {
-                if (ball != null && playLeft > 0f) enter(State.PLAY) else enter(State.IDLE)
+                if (ball != null && playLeft > 0f) startPlay() else enter(State.IDLE)
             }
             State.PET -> if (stateTime >= 1.6f) enter(State.IDLE)
             State.SLEEP -> if (stateTime >= stateDur) enter(State.IDLE)
@@ -241,6 +243,15 @@ class CatBrain(
         stateDur = duration
     }
 
+    private fun startPlay() {
+        enter(State.PLAY)
+        playMoving = false
+        poseHold = 0f
+        swatTime = 0f
+        play(0f) // pick the running or watching pose now, so no stray frame of the other shows
+        if (state == State.PLAY && !playMoving) poseHold = 0.3f
+    }
+
     private fun enterAir() {
         state = State.AIR
         stateTime = 0f
@@ -288,24 +299,40 @@ class CatBrain(
             enter(State.IDLE, 3f + rng.nextFloat() * 4f)
             return
         }
+        poseHold -= dt
+        swatTime -= dt
         val dx = b.centerX - (x + size / 2f)
-        if (abs(dx) > size * 0.35f) {
+        val adx = abs(dx)
+        // Only set off after the ball once it is clearly out of reach, and keep each pose for a
+        // moment, so she does not flicker between running and standing as it bounces overhead.
+        if (playMoving) {
+            if (adx < size * 0.2f) {
+                playMoving = false
+                poseHold = 0.35f
+            }
+        } else if (poseHold <= 0f && swatTime <= 0f && adx > size * (if (b.moving) 0.9f else 0.3f)) {
             playMoving = true
-            moveToward(b.centerX - size / 2f, 3.2f * size * dt)
-        } else {
-            playMoving = false
         }
-        val withinReach = abs(dx) < size * 0.5f && b.centerY > y - size * 0.2f
-        if (withinReach && swatCooldown <= 0f && !b.held) {
+        if (playMoving) {
+            moveToward(b.centerX - size / 2f, 3f * size * dt)
+        } else if (adx > size * 0.3f) {
+            facingRight = dx > 0f
+        }
+        val withinReach = adx < size * 0.6f && b.centerY > y - size * 0.2f
+        val settled = playMoving || poseHold <= 0.15f // no bat in the instant after stopping
+        if (withinReach && settled && swatCooldown <= 0f && !b.held) {
             val dir = when {
                 b.centerX < worldW * 0.2f -> 1f
                 b.centerX > worldW * 0.8f -> -1f
                 else -> if (rng.nextBoolean()) 1f else -1f
             }
-            b.kick(dir * (2f + rng.nextFloat() * 4f) * size, -(8f + rng.nextFloat() * 6f) * size)
+            b.kick(dir * (1.5f + rng.nextFloat() * 2.5f) * size, -(8f + rng.nextFloat() * 6f) * size)
             facingRight = dir > 0f
-            swatCooldown = 0.5f
-            if (rng.nextFloat() < 0.35f) {
+            playMoving = false
+            swatTime = 0.3f
+            poseHold = 0.65f // stand and watch it fly before setting off again
+            swatCooldown = 0.8f
+            if (rng.nextFloat() < 0.2f) {
                 // pounce after it
                 vx = dir * 1.5f * size
                 vy = -5f * size
@@ -338,7 +365,8 @@ class CatBrain(
             } else {
                 vx = 0f
                 vy = 0f
-                enter(State.LAND)
+                // mid-game she lands on her feet and keeps going, without the sit-down squash
+                if (ball != null && playLeft > 0f) startPlay() else enter(State.LAND)
             }
         }
     }
