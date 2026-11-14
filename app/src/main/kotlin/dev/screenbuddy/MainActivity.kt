@@ -71,6 +71,13 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(Prefs.BALL, on).apply() }
         })
 
+        Setup.BALL_BUTTON?.let { label ->
+            add(Button(this).apply {
+                text = label
+                setOnClickListener { Setup.toggleBall(this@MainActivity) }
+            })
+        }
+
         add(TextView(this).apply { text = "Size"; textSize = 16f }, pad)
         val sizes = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL; gravity = Gravity.START }
         val labels = arrayOf("Small", "Medium", "Large")

@@ -13,8 +13,8 @@ with.
 | Permission | Display over other apps | Accessibility service |
 | Pet, carry, toss, wander, nap | Yes | Yes |
 | Runs after things you tap | No – it only knows the screen was touched | Yes |
-| Jumps onto the keyboard | No | Yes |
-| Wool ball in the notification tray | No | Yes |
+| Jumps onto the keyboard | On most phones (uses a workaround) | Yes |
+| Wool ball | From a button on its notification or in the app | Drops in when the notification tray opens |
 
 Both are built by every run under the repository's **Actions** tab (`screen-buddy-lite-apk`
 and `screen-buddy-full-apk`) and can be installed side by side.

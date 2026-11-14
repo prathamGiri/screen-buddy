@@ -30,6 +30,11 @@ object Setup {
         activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
+    /** The ball drops in by itself when the notification tray opens, so there is no button. */
+    val BALL_BUTTON: String? = null
+
+    fun toggleBall(activity: Activity) = Unit
+
     /** Nothing to do: the system keeps the accessibility service running. */
     fun sync(activity: Activity) = Unit
 }

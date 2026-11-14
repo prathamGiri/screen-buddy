@@ -88,6 +88,10 @@ class CatHost(
         kick()
     }
 
+    fun toggleBall() {
+        setBall(brain?.ball == null)
+    }
+
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
         if (Prefs.show(p)) {
             if (view == null) showCat() else applyWorld()

@@ -18,21 +18,26 @@ import android.view.WindowManager
 class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private var host: CatHost? = null
+    private var keyboard: KeyboardWatcher? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel("cat", "Cat on screen", NotificationManager.IMPORTANCE_MIN)
+        val channel = NotificationChannel("cat", "Cat on screen", NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
+        val ball = PendingIntent.getService(
+            this, 1, Intent(this, OverlayService::class.java).setAction(ACTION_BALL), PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = Notification.Builder(this, "cat")
             .setSmallIcon(android.R.drawable.star_on)
             .setContentTitle("The cat is on your screen")
-            .setContentText("Tap to open settings or hide it.")
+            .setContentText("Tap Wool ball to throw her a ball, or to take it away again.")
             .setContentIntent(open)
+            .addAction(Notification.Action.Builder(null, "Wool ball", ball).build())
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 34) {
@@ -45,13 +50,22 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             return
         }
         Prefs.of(this).registerOnSharedPreferenceChangeListener(this)
-        host = CatHost(this, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY).also { it.start() }
+        val watcher = KeyboardWatcher(this) { host?.applyWorld() }
+        keyboard = watcher
+        host = CatHost(this, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY) { watcher.top }
+            .also { it.start() }
+        watcher.start()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_BALL) host?.toggleBall()
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         Prefs.of(this).unregisterOnSharedPreferenceChangeListener(this)
+        keyboard?.stop()
+        keyboard = null
         host?.stop()
         host = null
         super.onDestroy()
@@ -64,5 +78,9 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
         if (!Prefs.show(p)) stopSelf()
+    }
+
+    companion object {
+        const val ACTION_BALL = "dev.screenbuddy.action.BALL"
     }
 }
