@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Screen Buddy</string>
-    <string name="service_description">Lets the pixel cat live on top of your screen and react to where you tap and scroll. Screen Buddy only uses the position of taps; it never reads, stores or sends what is on your screen.</string>
 </resources>

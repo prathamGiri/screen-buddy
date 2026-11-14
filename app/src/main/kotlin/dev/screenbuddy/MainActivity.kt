@@ -1,10 +1,7 @@
 package dev.screenbuddy
 
 import android.app.Activity
-import android.content.ComponentName
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -41,13 +38,12 @@ class MainActivity : Activity() {
         status = TextView(this).apply { textSize = 16f }
         add(status)
         enable = Button(this).apply {
-            text = "Open accessibility settings"
-            setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+            text = Setup.BUTTON
+            setOnClickListener { Setup.openSettings(this@MainActivity) }
         }
         add(enable)
         add(TextView(this).apply {
-            text = "If Android says the setting is restricted: open this app's App info page, tap the " +
-                "three-dot menu and choose \"Allow restricted settings\", then try again."
+            text = Setup.HINT
             textSize = 13f
             alpha = 0.7f
         })
@@ -56,9 +52,12 @@ class MainActivity : Activity() {
             text = "Show the cat"
             textSize = 16f
             isChecked = Prefs.show(prefs)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(Prefs.SHOW, on).apply() }
+            setOnCheckedChangeListener { _, on ->
+                prefs.edit().putBoolean(Prefs.SHOW, on).apply()
+                Setup.sync(this@MainActivity)
+            }
         }, pad)
-        add(Switch(this).apply {
+        if (Setup.CAN_CHASE) add(Switch(this).apply {
             text = "Chase my taps"
             textSize = 16f
             isChecked = Prefs.chase(prefs)
@@ -79,8 +78,7 @@ class MainActivity : Activity() {
         add(sizes, 0)
 
         add(TextView(this).apply {
-            text = "Tap the cat to pet it. Drag it to carry it, and let go mid-swipe to toss it. " +
-                "It runs after things you tap, climbs onto the keyboard, and naps when you leave it alone."
+            text = Setup.HOW_TO
             textSize = 14f
             alpha = 0.8f
         }, pad)
@@ -90,19 +88,9 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        val on = isServiceEnabled()
-        status.text = if (on) {
-            "The cat is allowed on your screen."
-        } else {
-            "To let the cat live on your screen, turn on Screen Buddy under Accessibility > Installed apps."
-        }
-        enable.visibility = View.VISIBLE
-    }
-
-    private fun isServiceEnabled(): Boolean {
-        val mine = ComponentName(this, BuddyService::class.java)
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            ?: return false
-        return enabled.split(':').any { ComponentName.unflattenFromString(it) == mine }
+        val ready = Setup.isReady(this)
+        status.text = if (ready) Setup.READY else Setup.NOT_READY
+        enable.visibility = if (ready && !Setup.CAN_CHASE) View.GONE else View.VISIBLE
+        Setup.sync(this)
     }
 }

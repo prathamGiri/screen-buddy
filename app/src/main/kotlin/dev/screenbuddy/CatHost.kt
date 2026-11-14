@@ -1,36 +1,37 @@
 package dev.screenbuddy
 
-import android.accessibilityservice.AccessibilityService
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Point
-import android.graphics.Rect
 import android.os.Build
 import android.os.PowerManager
 import android.view.Choreographer
 import android.view.Gravity
 import android.view.WindowInsets
 import android.view.WindowManager
-import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityWindowInfo
 import dev.screenbuddy.core.CatBrain
 import dev.screenbuddy.core.Sprites
 import kotlin.math.roundToInt
 
 /**
- * Hosts the cat in an accessibility overlay window and feeds it the position of the user's taps.
- * Only event types and on-screen bounds are used; no screen content is read or kept.
+ * Owns the cat's overlay window, its behaviour and the frame loop. The surrounding service
+ * decides which kind of overlay window to use and feeds in whatever it knows about touches.
+ *
+ * @param windowType the WindowManager.LayoutParams window type to draw the cat in
+ * @param keyboardTop returns the top edge of the on-screen keyboard, or null if unknown or closed
  */
-class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener,
-    CatView.Listener, Choreographer.FrameCallback {
+class CatHost(
+    private val context: Context,
+    private val windowType: Int,
+    private val keyboardTop: () -> Int? = { null },
+) : SharedPreferences.OnSharedPreferenceChangeListener, CatView.Listener, Choreographer.FrameCallback {
 
-    private lateinit var prefs: SharedPreferences
-    private lateinit var wm: WindowManager
+    private val prefs = Prefs.of(context)
+    private val wm = context.getSystemService(WindowManager::class.java)
     private var view: CatView? = null
     private var params: WindowManager.LayoutParams? = null
     private var brain: CatBrain? = null
@@ -38,7 +39,6 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
     private var screenOn = true
     private var ticking = false
     private var lastFrameNanos = 0L
-    private val bounds = Rect()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -47,28 +47,34 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
         }
     }
 
-    override fun onServiceConnected() {
-        prefs = Prefs.of(this)
-        wm = getSystemService(WindowManager::class.java)
+    fun start() {
         prefs.registerOnSharedPreferenceChangeListener(this)
-        registerReceiver(screenReceiver, IntentFilter().apply {
+        context.registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
         })
-        screenOn = getSystemService(PowerManager::class.java).isInteractive
+        screenOn = context.getSystemService(PowerManager::class.java).isInteractive
         if (Prefs.show(prefs)) showCat()
     }
 
-    override fun onDestroy() {
+    fun stop() {
         hideCat()
-        if (::prefs.isInitialized) {
-            prefs.unregisterOnSharedPreferenceChangeListener(this)
-            unregisterReceiver(screenReceiver)
-        }
-        super.onDestroy()
+        prefs.unregisterOnSharedPreferenceChangeListener(this)
+        context.unregisterReceiver(screenReceiver)
     }
 
-    override fun onInterrupt() = Unit
+    /** The floor the cat currently stands on, in screen pixels. */
+    val floor: Float get() = brain?.floor ?: 0f
+
+    fun onTap(x: Float, y: Float) {
+        brain?.onTap(x, y)
+        kick()
+    }
+
+    fun onNotice() {
+        brain?.onNotice()
+        kick()
+    }
 
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
         if (Prefs.show(p)) {
@@ -78,32 +84,6 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
         }
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        applyWorld()
-    }
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        val cat = brain ?: return
-        if (event.packageName == packageName) return
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED, AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> {
-                val source = event.source
-                if (source == null) {
-                    cat.onNotice()
-                } else {
-                    source.getBoundsInScreen(bounds)
-                    // a "click" on something that fills the screen says nothing about where the finger was
-                    val vague = bounds.isEmpty || bounds.height() > cat.floor * 0.5f
-                    if (vague) cat.onNotice() else cat.onTap(bounds.exactCenterX(), bounds.exactCenterY())
-                }
-            }
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> applyWorld()
-            else -> cat.onNotice()
-        }
-        kick()
-    }
-
     // --- overlay window ---
 
     private fun showCat() {
@@ -111,7 +91,7 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
         val size = spriteSize()
         val lp = WindowManager.LayoutParams(
             size, size,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            windowType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
@@ -132,7 +112,7 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
         cat.dragStart()
         cat.dragTo(cat.x, cat.floor - size * 4f)
         cat.dragEnd(0f, 0f)
-        val v = CatView(this, this)
+        val v = CatView(context, this)
         lp.x = cat.x.roundToInt()
         lp.y = cat.y.roundToInt()
         wm.addView(v, lp)
@@ -151,7 +131,7 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
     }
 
     /** Re-measure the screen, floor and sprite size after a rotation, keyboard or settings change. */
-    private fun applyWorld() {
+    fun applyWorld() {
         val cat = brain ?: return
         val lp = params ?: return
         val size = spriteSize()
@@ -167,7 +147,7 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
     }
 
     private fun spriteSize(): Int =
-        (Sprites.SIZE * Prefs.scale(prefs) * resources.displayMetrics.density).roundToInt()
+        (Sprites.SIZE * Prefs.scale(prefs) * context.resources.displayMetrics.density).roundToInt()
 
     @Suppress("DEPRECATION")
     private fun screenSize(): Point {
@@ -188,16 +168,8 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
             floor -= wm.currentWindowMetrics.windowInsets
                 .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom
         }
-        try {
-            for (w in windows) {
-                if (w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) {
-                    w.getBoundsInScreen(bounds)
-                    if (bounds.top > screen.y / 4 && bounds.top < floor) floor = bounds.top
-                }
-            }
-        } catch (_: RuntimeException) {
-            // the window list is occasionally unavailable mid-transition; keep the plain floor
-        }
+        val top = keyboardTop()
+        if (top != null && top > screen.y / 4 && top < floor) floor = top
         return floor
     }
 
@@ -269,8 +241,5 @@ class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenc
         kick()
     }
 
-    override fun onOutsideTouch() {
-        brain?.onNotice()
-        kick()
-    }
+    override fun onOutsideTouch() = onNotice()
 }
