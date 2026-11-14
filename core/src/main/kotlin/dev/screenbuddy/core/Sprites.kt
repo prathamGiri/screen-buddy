@@ -16,6 +16,8 @@ enum class Anim(val frames: Int, val fps: Float) {
 
 object Sprites {
     const val SIZE = 32
+    const val BALL_SIZE = 12
+    const val BALL_FRAMES = 4
 
     private const val OUTLINE = 0xFF2B2233.toInt()
     private const val FUR = 0xFFF2A03D.toInt()
@@ -26,14 +28,17 @@ object Sprites {
     private const val HEART = 0xFFFF5C7A.toInt()
     private const val BANG = 0xFFFFD84A.toInt()
     private const val ZZZ = 0xFFBFE3FF.toInt()
+    private const val WOOL = 0xFFE23B4E.toInt()
+    private const val WOOL_DARK = 0xFFA81E3A.toInt()
+    private const val WOOL_LIGHT = 0xFFFF98A2.toInt()
 
     private enum class Eyes { OPEN, CLOSED, HAPPY, WIDE }
 
-    private class Grid {
-        val px = IntArray(SIZE * SIZE)
+    private class Grid(val n: Int = SIZE) {
+        val px = IntArray(n * n)
 
         fun set(x: Int, y: Int, c: Int) {
-            if (x in 0 until SIZE && y in 0 until SIZE) px[y * SIZE + x] = c
+            if (x in 0 until n && y in 0 until n) px[y * n + x] = c
         }
 
         fun rect(x0: Int, y0: Int, x1: Int, y1: Int, c: Int) {
@@ -43,15 +48,34 @@ object Sprites {
         /** Surround every filled pixel with a dark outline. */
         fun outline() {
             val src = px.copyOf()
-            for (y in 0 until SIZE) for (x in 0 until SIZE) {
-                if (src[y * SIZE + x] != 0) continue
-                val near = (x > 0 && src[y * SIZE + x - 1] != 0) ||
-                    (x < SIZE - 1 && src[y * SIZE + x + 1] != 0) ||
-                    (y > 0 && src[(y - 1) * SIZE + x] != 0) ||
-                    (y < SIZE - 1 && src[(y + 1) * SIZE + x] != 0)
-                if (near) px[y * SIZE + x] = OUTLINE
+            for (y in 0 until n) for (x in 0 until n) {
+                if (src[y * n + x] != 0) continue
+                val near = (x > 0 && src[y * n + x - 1] != 0) ||
+                    (x < n - 1 && src[y * n + x + 1] != 0) ||
+                    (y > 0 && src[(y - 1) * n + x] != 0) ||
+                    (y < n - 1 && src[(y + 1) * n + x] != 0)
+                if (near) px[y * n + x] = OUTLINE
             }
         }
+    }
+
+    private val ballCache = arrayOfNulls<IntArray>(BALL_FRAMES)
+
+    /** Pixels for the ball of wool, row-major ARGB, [BALL_SIZE] x [BALL_SIZE]. */
+    fun ball(frame: Int): IntArray {
+        val f = Math.floorMod(frame, BALL_FRAMES)
+        ballCache[f]?.let { return it }
+        val g = Grid(BALL_SIZE)
+        for (y in 0 until BALL_SIZE) for (x in 0 until BALL_SIZE) {
+            val dx = x - 5.5f
+            val dy = y - 5.5f
+            if (dx * dx + dy * dy > 21.5f) continue
+            // diagonal strands that shift as the ball rolls
+            g.set(x, y, if ((x + y + f) % 4 == 0) WOOL_DARK else WOOL)
+        }
+        g.set(3, 3, WOOL_LIGHT); g.set(4, 2, WOOL_LIGHT); g.set(3, 2, WOOL_LIGHT)
+        g.outline()
+        return g.px.also { ballCache[f] = it }
     }
 
     private val cache = HashMap<Int, IntArray>()

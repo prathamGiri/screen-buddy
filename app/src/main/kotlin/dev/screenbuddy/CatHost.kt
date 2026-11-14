@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.view.Choreographer
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.WindowInsets
 import android.view.WindowManager
 import dev.screenbuddy.core.CatBrain
@@ -28,12 +29,14 @@ class CatHost(
     private val context: Context,
     private val windowType: Int,
     private val keyboardTop: () -> Int? = { null },
-) : SharedPreferences.OnSharedPreferenceChangeListener, CatView.Listener, Choreographer.FrameCallback {
+) : SharedPreferences.OnSharedPreferenceChangeListener, SpriteView.Listener, Choreographer.FrameCallback {
 
     private val prefs = Prefs.of(context)
     private val wm = context.getSystemService(WindowManager::class.java)
-    private var view: CatView? = null
+    private var view: SpriteView? = null
     private var params: WindowManager.LayoutParams? = null
+    private var ballView: SpriteView? = null
+    private var ballParams: WindowManager.LayoutParams? = null
     private var brain: CatBrain? = null
 
     private var screenOn = true
@@ -76,6 +79,15 @@ class CatHost(
         kick()
     }
 
+    /** Drop a ball of wool onto the screen for the cat to play with, or take it away again. */
+    fun setBall(present: Boolean) {
+        val cat = brain ?: return
+        if (present == (cat.ball != null)) return
+        if (present) cat.giveBall() else cat.takeBall()
+        render()
+        kick()
+    }
+
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
         if (Prefs.show(p)) {
             if (view == null) showCat() else applyWorld()
@@ -89,22 +101,7 @@ class CatHost(
     private fun showCat() {
         if (view != null) return
         val size = spriteSize()
-        val lp = WindowManager.LayoutParams(
-            size, size,
-            windowType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-            PixelFormat.TRANSLUCENT,
-        )
-        lp.gravity = Gravity.TOP or Gravity.START
-        lp.layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30) {
-            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-        } else {
-            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
-        lp.title = "Screen Buddy"
+        val lp = windowParams(size, WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
         val screen = screenSize()
         val cat = CatBrain(screen.x.toFloat(), findFloor(screen).toFloat(), size.toFloat())
         cat.chaseEnabled = Prefs.chase(prefs)
@@ -112,7 +109,7 @@ class CatHost(
         cat.dragStart()
         cat.dragTo(cat.x, cat.floor - size * 4f)
         cat.dragEnd(0f, 0f)
-        val v = CatView(context, this)
+        val v = SpriteView(context, this)
         lp.x = cat.x.roundToInt()
         lp.y = cat.y.roundToInt()
         wm.addView(v, lp)
@@ -123,7 +120,30 @@ class CatHost(
         kick()
     }
 
+    private fun windowParams(side: Int, extraFlags: Int = 0): WindowManager.LayoutParams {
+        val lp = WindowManager.LayoutParams(
+            side, side,
+            windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                extraFlags,
+            PixelFormat.TRANSLUCENT,
+        )
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30) {
+            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        } else {
+            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        lp.title = "Screen Buddy"
+        return lp
+    }
+
     private fun hideCat() {
+        ballView?.let { wm.removeView(it) }
+        ballView = null
+        ballParams = null
         view?.let { wm.removeView(it) }
         view = null
         params = null
@@ -142,7 +162,13 @@ class CatHost(
             lp.width = size
             lp.height = size
             wm.updateViewLayout(view, lp)
+            // the ball is sized to match the cat; drop a fresh one if there was one
+            if (cat.ball != null) {
+                cat.takeBall()
+                cat.giveBall()
+            }
         }
+        render()
         kick()
     }
 
@@ -208,7 +234,9 @@ class CatHost(
         val cat = brain ?: return
         val v = view ?: return
         val lp = params ?: return
-        v.show(cat.anim, cat.frame, cat.facingRight)
+        val anim = cat.anim
+        val frame = cat.frame
+        v.show(anim.ordinal * 64 + frame, Sprites.SIZE, cat.facingRight) { Sprites.frame(anim, frame) }
         val nx = cat.x.roundToInt()
         val ny = cat.y.roundToInt()
         v.windowX = nx
@@ -218,12 +246,72 @@ class CatHost(
             lp.y = ny
             wm.updateViewLayout(v, lp)
         }
+        renderBall(cat)
+    }
+
+    private fun renderBall(cat: CatBrain) {
+        val ball = cat.ball
+        var bv = ballView
+        if (ball == null) {
+            if (bv != null) {
+                wm.removeView(bv)
+                ballView = null
+                ballParams = null
+            }
+            return
+        }
+        val bx = ball.x.roundToInt()
+        val by = ball.y.roundToInt()
+        var lp = ballParams
+        if (bv == null || lp == null) {
+            bv = SpriteView(context, ballListener)
+            lp = windowParams(ball.d.roundToInt())
+            lp.x = bx
+            lp.y = by
+            wm.addView(bv, lp)
+            ballView = bv
+            ballParams = lp
+        }
+        val frame = ball.frame
+        bv.show(frame, Sprites.BALL_SIZE, true) { Sprites.ball(frame) }
+        bv.windowX = bx
+        bv.windowY = by
+        if (bx != lp.x || by != lp.y) {
+            lp.x = bx
+            lp.y = by
+            wm.updateViewLayout(bv, lp)
+        }
+    }
+
+    /** Touches on the ball: tap to nudge it, drag to carry it, fling to throw it. */
+    private val ballListener = object : SpriteView.Listener {
+        override fun onTap() {
+            brain?.ballPoke()
+            kick()
+        }
+
+        override fun onDragStart() {
+            brain?.ballGrab()
+            kick()
+        }
+
+        override fun onDragTo(x: Float, y: Float) {
+            brain?.ballDragTo(x, y)
+        }
+
+        override fun onDragEnd(velX: Float, velY: Float) {
+            brain?.ballRelease(velX, velY)
+            kick()
+        }
+
+        override fun onOutsideTouch() = Unit
     }
 
     // --- touches on the cat itself ---
 
-    override fun onPet() {
+    override fun onTap() {
         brain?.onPet()
+        view?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
         kick()
     }
 

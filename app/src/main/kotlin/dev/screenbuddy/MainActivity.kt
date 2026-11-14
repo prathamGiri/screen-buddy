@@ -64,6 +64,13 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(Prefs.CHASE, on).apply() }
         })
 
+        if (Setup.CAN_CHASE) add(Switch(this).apply {
+            text = "Wool ball in the notification tray"
+            textSize = 16f
+            isChecked = Prefs.ball(prefs)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(Prefs.BALL, on).apply() }
+        })
+
         add(TextView(this).apply { text = "Size"; textSize = 16f }, pad)
         val sizes = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL; gravity = Gravity.START }
         val labels = arrayOf("Small", "Medium", "Large")

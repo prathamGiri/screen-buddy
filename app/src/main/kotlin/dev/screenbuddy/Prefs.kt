@@ -7,6 +7,7 @@ object Prefs {
     const val SHOW = "show"
     const val CHASE = "chase"
     const val SCALE = "scale"
+    const val BALL = "ball"
 
     /** Screen dp per sprite pixel for the small, medium and large cat. */
     val SCALES = intArrayOf(2, 3, 4)
@@ -16,5 +17,6 @@ object Prefs {
 
     fun show(p: SharedPreferences) = p.getBoolean(SHOW, true)
     fun chase(p: SharedPreferences) = p.getBoolean(CHASE, true)
+    fun ball(p: SharedPreferences) = p.getBoolean(BALL, true)
     fun scale(p: SharedPreferences) = p.getInt(SCALE, 3).coerceIn(SCALES.first(), SCALES.last())
 }

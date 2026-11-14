@@ -1,6 +1,7 @@
 package dev.screenbuddy
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.view.WindowManager
@@ -49,9 +50,33 @@ class BuddyService : AccessibilityService() {
                     if (vague) cat.onNotice() else cat.onTap(bounds.exactCenterX(), bounds.exactCenterY())
                 }
             }
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> cat.applyWorld()
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                cat.applyWorld()
+                cat.setBall(Prefs.ball(Prefs.of(this)) && isShadeOpen())
+            }
             else -> cat.onNotice()
         }
+    }
+
+    /**
+     * True while the notification tray is pulled down. There is no direct API for this, so look
+     * for a system window that covers most of the screen while the phone is unlocked.
+     */
+    private fun isShadeOpen(): Boolean {
+        if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
+        val metrics = resources.displayMetrics
+        try {
+            for (w in windows) {
+                if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) continue
+                w.getBoundsInScreen(bounds)
+                if (bounds.height() > metrics.heightPixels * 0.5f && bounds.width() > metrics.widthPixels * 0.9f) {
+                    return true
+                }
+            }
+        } catch (_: RuntimeException) {
+            // the window list is occasionally unavailable mid-transition
+        }
+        return false
     }
 
     private fun keyboardTop(): Int? {

@@ -10,16 +10,14 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
-import dev.screenbuddy.core.Anim
-import dev.screenbuddy.core.Sprites
 import kotlin.math.abs
 
-/** Draws the current sprite frame and turns touches on the cat into pets, drags and flings. */
+/** Draws one pixel-art sprite and turns touches on it into taps, drags and flings. */
 @SuppressLint("ViewConstructor")
-class CatView(context: Context, private val listener: Listener) : View(context) {
+class SpriteView(context: Context, private val listener: Listener) : View(context) {
 
     interface Listener {
-        fun onPet()
+        fun onTap()
         fun onDragStart()
         fun onDragTo(x: Float, y: Float)
         fun onDragEnd(velX: Float, velY: Float)
@@ -44,10 +42,10 @@ class CatView(context: Context, private val listener: Listener) : View(context) 
     var windowX = 0
     var windowY = 0
 
-    fun show(anim: Anim, frame: Int, facingRight: Boolean) {
-        val key = anim.ordinal * 64 + frame
+    /** Show a square sprite of [side] pixels; [key] identifies the frame so its bitmap is reused. */
+    fun show(key: Int, side: Int, facingRight: Boolean, pixels: () -> IntArray) {
         val next = bitmaps.getOrPut(key) {
-            Bitmap.createBitmap(Sprites.frame(anim, frame), Sprites.SIZE, Sprites.SIZE, Bitmap.Config.ARGB_8888)
+            Bitmap.createBitmap(pixels(), side, side, Bitmap.Config.ARGB_8888)
         }
         if (next !== bitmap || flip == facingRight) {
             bitmap = next
@@ -98,7 +96,7 @@ class CatView(context: Context, private val listener: Listener) : View(context) 
                     t?.computeCurrentVelocity(1000)
                     listener.onDragEnd(t?.xVelocity ?: 0f, t?.yVelocity ?: 0f)
                 } else if (e.actionMasked == MotionEvent.ACTION_UP) {
-                    listener.onPet()
+                    listener.onTap()
                 }
                 t?.recycle()
                 tracker = null

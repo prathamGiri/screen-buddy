@@ -25,6 +25,15 @@ class SpriteSheetTest {
                 gfx.fillRect((f * 32 + x) * scale, (anim.ordinal * 32 + y) * scale, scale, scale)
             }
         }
+        for (f in 0 until Sprites.BALL_FRAMES) {
+            val px = Sprites.ball(f)
+            for (y in 0 until 12) for (x in 0 until 12) {
+                val c = px[y * 12 + x]
+                if (c == 0) continue
+                gfx.color = java.awt.Color(c, true)
+                gfx.fillRect(((5 + f) * 32 + x) * scale, (32 + y) * scale, scale, scale)
+            }
+        }
         gfx.dispose()
         val out = File("build/sprites.png")
         out.parentFile.mkdirs()

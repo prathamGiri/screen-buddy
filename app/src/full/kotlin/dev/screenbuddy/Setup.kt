@@ -15,7 +15,8 @@ object Setup {
     const val HINT = "If Android says the setting is restricted: open this app's App info page, tap the " +
         "three-dot menu and choose \"Allow restricted settings\", then try again."
     const val HOW_TO = "Tap the cat to pet it. Drag it to carry it, and let go mid-swipe to toss it. " +
-        "It runs after things you tap, climbs onto the keyboard, and naps when you leave it alone."
+        "It runs after things you tap, jumps onto the keyboard, and naps when you leave it alone. " +
+        "Pull down the notification tray and a ball of wool drops in; you can throw it for her too."
 
     fun isReady(activity: Activity): Boolean {
         val mine = ComponentName(activity, BuddyService::class.java)

@@ -2,7 +2,8 @@
 
 A pixel cat that lives on top of your Android screen. It wanders along the bottom edge, runs
 after things you tap, climbs onto the keyboard, naps when you leave it alone, and can be petted,
-carried and tossed.
+carried and tossed. Pull down the notification tray and a ball of wool drops in for it to play
+with.
 
 ## Two builds
 
@@ -12,7 +13,8 @@ carried and tossed.
 | Permission | Display over other apps | Accessibility service |
 | Pet, carry, toss, wander, nap | Yes | Yes |
 | Runs after things you tap | No – it only knows the screen was touched | Yes |
-| Stands on the keyboard | No | Yes |
+| Jumps onto the keyboard | No | Yes |
+| Wool ball in the notification tray | No | Yes |
 
 Both are built by every run under the repository's **Actions** tab (`screen-buddy-lite-apk`
 and `screen-buddy-full-apk`) and can be installed side by side.

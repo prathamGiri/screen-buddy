@@ -18,7 +18,7 @@ class CatBrain(
     size: Float,
     private val rng: Random = Random.Default,
 ) {
-    enum class State { IDLE, WALK, ALERT, CHASE, AIR, LAND, PET, SLEEP, DRAG }
+    enum class State { IDLE, WALK, ALERT, CHASE, PLAY, AIR, LAND, PET, SLEEP, DRAG }
 
     var worldW = worldW
         private set
@@ -38,6 +38,14 @@ class CatBrain(
 
     /** When false the cat still notices taps but does not run after them. */
     var chaseEnabled = true
+
+    /** The ball of wool, while there is one to play with. */
+    var ball: Ball? = null
+        private set
+
+    private var playLeft = 0f
+    private var swatCooldown = 0f
+    private var playMoving = false
 
     private var vx = 0f
     private var vy = 0f
@@ -59,6 +67,7 @@ class CatBrain(
             State.WALK -> Anim.WALK
             State.ALERT -> Anim.ALERT
             State.CHASE -> Anim.RUN
+            State.PLAY -> if (playMoving) Anim.RUN else Anim.IDLE
             State.AIR -> if (vy < 0f) Anim.JUMP else Anim.FALL
             State.LAND -> Anim.LAND
             State.PET -> Anim.PET
@@ -71,25 +80,74 @@ class CatBrain(
     /** True while the cat is moving and wants to be ticked every display frame. */
     val isBusy: Boolean
         get() = state == State.WALK || state == State.CHASE || state == State.AIR ||
-            state == State.DRAG || state == State.LAND || state == State.ALERT
+            state == State.DRAG || state == State.LAND || state == State.ALERT ||
+            state == State.PLAY || ball?.moving == true
 
     fun resize(worldW: Float, floor: Float, size: Float) {
         this.worldW = worldW
         this.floor = floor
         this.size = size
         x = x.coerceIn(0f, maxX)
-        if (state != State.DRAG && state != State.AIR) {
-            if (y > standY) y = standY else if (y < standY - 1f) enter(State.AIR)
+        if (state != State.DRAG && state != State.AIR && y < standY - 1f) enter(State.AIR)
+    }
+
+    /** A ball of wool drops in from the top of the screen. */
+    fun giveBall() {
+        if (ball != null) return
+        val d = size * Sprites.BALL_SIZE / Sprites.SIZE
+        ball = Ball((0.2f + rng.nextFloat() * 0.6f) * (worldW - d), 0f, d).also {
+            it.kick((rng.nextFloat() - 0.5f) * 3f * size, 0f)
         }
+        playLeft = 15f + rng.nextFloat() * 15f
+        if (state != State.DRAG && state != State.AIR && state != State.ALERT) enter(State.ALERT, 0.5f)
+    }
+
+    fun takeBall() {
+        ball = null
+        if (state == State.PLAY) enter(State.IDLE)
+    }
+
+    fun ballGrab() {
+        ball?.held = true
+    }
+
+    fun ballDragTo(nx: Float, ny: Float) {
+        val b = ball ?: return
+        if (!b.held) return
+        b.x = nx.coerceIn(0f, (worldW - b.d).coerceAtLeast(0f))
+        b.y = ny.coerceIn(0f, floor - b.d)
+    }
+
+    /** Let go of the ball, optionally throwing it with a velocity in px/s. */
+    fun ballRelease(velX: Float, velY: Float) {
+        val b = ball ?: return
+        val cap = 40f * size
+        b.held = false
+        b.kick(velX.coerceIn(-cap, cap), velY.coerceIn(-cap, cap))
+        playLeft = playLeft.coerceAtLeast(10f)
+    }
+
+    /** A tap on the ball nudges it. */
+    fun ballPoke() {
+        val b = ball ?: return
+        b.kick((rng.nextFloat() - 0.5f) * 8f * size, -(6f + rng.nextFloat() * 4f) * size)
+        playLeft = playLeft.coerceAtLeast(10f)
     }
 
     fun update(dtSeconds: Float) {
         val dt = dtSeconds.coerceIn(0f, 0.05f)
         stateTime += dt
         quietTime += dt
+        ball?.update(dt, worldW, floor, gravity)
+        // the floor rose above the cat (the keyboard opened): look up, then jump onto it
+        if (y > standY + 1f && state != State.AIR && state != State.DRAG && state != State.ALERT) {
+            hasTarget = false
+            enter(State.ALERT, 0.6f)
+        }
         when (state) {
             State.IDLE -> if (stateTime >= stateDur) {
                 when {
+                    ball != null && playLeft > 0f -> enter(State.PLAY)
                     quietTime > 40f && rng.nextFloat() < 0.5f -> enter(State.SLEEP, 40f + rng.nextFloat() * 80f)
                     rng.nextFloat() < 0.65f -> {
                         walkTo = rng.nextFloat() * maxX
@@ -100,11 +158,24 @@ class CatBrain(
             }
             State.WALK -> if (moveToward(walkTo, 0.8f * size * dt)) enter(State.IDLE)
             State.ALERT -> if (stateTime >= stateDur) {
-                if (hasTarget && chaseEnabled) enter(State.CHASE) else enter(State.IDLE)
+                when {
+                    y > standY + 1f -> {
+                        val h = (y - standY) + 0.6f * size
+                        vx = 0f
+                        vy = -sqrt(2f * gravity * h)
+                        enterAir()
+                    }
+                    ball != null && playLeft > 0f -> enter(State.PLAY)
+                    hasTarget && chaseEnabled -> enter(State.CHASE)
+                    else -> enter(State.IDLE)
+                }
             }
+            State.PLAY -> play(dt)
             State.CHASE -> chase(dt)
             State.AIR -> fly(dt)
-            State.LAND -> if (stateTime >= 0.25f) enter(State.IDLE)
+            State.LAND -> if (stateTime >= 0.25f) {
+                if (ball != null && playLeft > 0f) enter(State.PLAY) else enter(State.IDLE)
+            }
             State.PET -> if (stateTime >= 1.6f) enter(State.IDLE)
             State.SLEEP -> if (stateTime >= stateDur) enter(State.IDLE)
             State.DRAG -> Unit
@@ -115,6 +186,7 @@ class CatBrain(
     fun onTap(tx: Float, ty: Float) {
         quietTime = 0f
         if (state == State.DRAG || state == State.AIR || state == State.SLEEP || state == State.PET) return
+        if (state == State.PLAY || y > standY + 1f) return
         if (state != State.CHASE && rng.nextFloat() > 0.8f) return // sometimes it can't be bothered
         hasTarget = true
         targetX = tx
@@ -202,6 +274,43 @@ class CatBrain(
             if (abs(dx) > 1f) facingRight = dx > 0f
             hasTarget = false
             enterAir()
+        }
+    }
+
+    /** Run after the ball and bat it whenever it is within reach. */
+    private fun play(dt: Float) {
+        val b = ball
+        playLeft -= dt
+        swatCooldown -= dt
+        if (b == null || playLeft <= 0f) {
+            // bored for a few seconds; idling ends by going back to the ball
+            playLeft = 10f + rng.nextFloat() * 10f
+            enter(State.IDLE, 3f + rng.nextFloat() * 4f)
+            return
+        }
+        val dx = b.centerX - (x + size / 2f)
+        if (abs(dx) > size * 0.35f) {
+            playMoving = true
+            moveToward(b.centerX - size / 2f, 3.2f * size * dt)
+        } else {
+            playMoving = false
+        }
+        val withinReach = abs(dx) < size * 0.5f && b.centerY > y - size * 0.2f
+        if (withinReach && swatCooldown <= 0f && !b.held) {
+            val dir = when {
+                b.centerX < worldW * 0.2f -> 1f
+                b.centerX > worldW * 0.8f -> -1f
+                else -> if (rng.nextBoolean()) 1f else -1f
+            }
+            b.kick(dir * (2f + rng.nextFloat() * 4f) * size, -(8f + rng.nextFloat() * 6f) * size)
+            facingRight = dir > 0f
+            swatCooldown = 0.5f
+            if (rng.nextFloat() < 0.35f) {
+                // pounce after it
+                vx = dir * 1.5f * size
+                vy = -5f * size
+                enterAir()
+            }
         }
     }
 

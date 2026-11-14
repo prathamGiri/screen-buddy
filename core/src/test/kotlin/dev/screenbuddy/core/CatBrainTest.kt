@@ -87,14 +87,70 @@ class CatBrainTest {
     }
 
     @Test
-    fun risesWithTheKeyboardAndFallsWhenItCloses() {
+    fun jumpsOntoTheKeyboardAfterItOpensAndFallsWhenItCloses() {
         val b = brain()
         b.resize(w, 1500f, size)
+        // the keyboard covers her first; she has not moved yet
+        assertEquals(floor - size, b.y, 0.5f)
+        b.run(0.3f)
+        assertEquals(floor - size, b.y, 0.5f)
+        var peak = Float.MAX_VALUE
+        b.run(3f) { if (it.y < peak) peak = it.y }
+        assertTrue(peak < 1500f - size, "she should jump above the keyboard, peak=$peak")
         assertEquals(1500f - size, b.y, 0.5f)
         b.resize(w, floor, size)
         assertEquals(CatBrain.State.AIR, b.state)
         b.run(3f)
         assertEquals(floor - size, b.y, 0.5f)
+    }
+
+    @Test
+    fun wakesUpToClimbTheKeyboard() {
+        val b = brain()
+        b.run(600f) { if (it.state == CatBrain.State.SLEEP) return@run }
+        b.resize(w, 1500f, size)
+        b.run(3f)
+        assertEquals(1500f - size, b.y, 0.5f)
+    }
+
+    @Test
+    fun playsWithTheBallAndKeepsItOnScreen() {
+        for (seed in 1..5) {
+            val b = brain(seed)
+            b.giveBall()
+            var played = false
+            var batted = false
+            var t = 0f
+            b.run(40f) {
+                t += 1f / 60f
+                val ball = it.ball!!
+                assertInBounds(it)
+                assertTrue(ball.x in 0f..(w - ball.d) && ball.y in 0f..(floor - ball.d), "ball out of bounds")
+                if (it.state == CatBrain.State.PLAY) played = true
+                // after the initial drop has settled, the ball only leaves the floor if she bats it
+                if (t > 5f && ball.y < floor - ball.d - size) batted = true
+            }
+            assertTrue(played, "seed $seed never played")
+            assertTrue(batted, "seed $seed never batted the ball")
+            b.takeBall()
+            b.run(3f)
+            assertTrue(b.state != CatBrain.State.PLAY)
+        }
+    }
+
+    @Test
+    fun thrownBallComesToRest() {
+        val b = brain()
+        b.chaseEnabled = false
+        b.giveBall()
+        b.ballGrab()
+        b.ballDragTo(300f, 300f)
+        b.ballRelease(5000f, -2000f)
+        b.takeBall() // physics only: check a fresh ball settles without the cat
+        val ball = Ball(300f, 300f, 72f).also { it.kick(5000f, -2000f) }
+        repeat(60 * 30) { ball.update(1f / 60f, w, floor, 30f * size) }
+        assertTrue(!ball.moving, "ball still moving: ${ball.vx}, ${ball.vy}")
+        assertEquals(floor - ball.d, ball.y, 0.5f)
     }
 
     @Test
