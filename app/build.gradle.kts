@@ -14,7 +14,9 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.screenbuddy"
+        // The app's permanent identity on Google Play; it can never change once uploaded.
+        // (The Kotlin package, dev.screenbuddy above, is internal and can stay as it is.)
+        applicationId = "com.deeppower.billuandfriends"
         minSdk = 29
         targetSdk = 36
         // Play needs a higher versionCode for every upload; CI passes its run number.
