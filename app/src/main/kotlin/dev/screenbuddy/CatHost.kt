@@ -16,6 +16,7 @@ import android.view.HapticFeedbackConstants
 import android.view.WindowInsets
 import android.view.WindowManager
 import dev.screenbuddy.core.Anim
+import dev.screenbuddy.core.Behavior
 import dev.screenbuddy.core.CatBrain
 import dev.screenbuddy.core.Sprites
 import kotlin.math.roundToInt
@@ -85,28 +86,6 @@ class CatHost(
         kick()
     }
 
-    /** Drop a ball of wool onto the screen for the cat to play with, or take it away again. */
-    fun setBall(present: Boolean) {
-        val cat = brain ?: return
-        if (present == (cat.ball != null)) return
-        if (present) cat.giveBall() else cat.takeBall()
-        render()
-        kick()
-    }
-
-    /** Calm mode: she sits still while a demanding app is open, so her window stops moving. */
-    var calm = false
-        set(value) {
-            if (field == value) return
-            field = value
-            brain?.calm = value
-            kick()
-        }
-
-    fun toggleBall() {
-        setBall(brain?.ball == null)
-    }
-
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
         if (Prefs.show(p)) {
             if (view == null) showCat() else applyWorld()
@@ -123,8 +102,9 @@ class CatHost(
         val lp = windowParams(size, WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
         val screen = screenSize()
         val cat = CatBrain(screen.x.toFloat(), findFloor(screen).toFloat(), size.toFloat())
-        cat.chaseEnabled = Prefs.chase(prefs)
-        cat.calm = calm
+        // without an accessibility service we only know the screen was touched, not where
+        cat.chaseEnabled = false
+        cat.enabled = Prefs.behaviors(prefs)
         // drop in from above the floor
         cat.dragStart()
         cat.dragTo(cat.x, cat.floor - size * 4f)
@@ -176,7 +156,7 @@ class CatHost(
         val lp = params ?: return
         val size = spriteSize()
         val screen = screenSize()
-        cat.chaseEnabled = Prefs.chase(prefs)
+        cat.enabled = Prefs.behaviors(prefs)
         cat.resize(screen.x.toFloat(), findFloor(screen).toFloat(), size.toFloat())
         if (lp.width != size) {
             lp.width = size
@@ -214,7 +194,7 @@ class CatHost(
             floor -= wm.currentWindowMetrics.windowInsets
                 .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom
         }
-        val top = keyboardTop()
+        val top = if (Prefs.isOn(prefs, Behavior.KEYBOARD)) keyboardTop() else null
         if (top != null && top > screen.y / 4 && top < floor) floor = top
         return floor
     }
@@ -248,7 +228,8 @@ class CatHost(
         if (cat.isBusy) {
             Choreographer.getInstance().postFrameCallback(this)
         } else {
-            val delay = if (cat.state == CatBrain.State.SLEEP) 250L else 120L
+            // fast enough to show every frame of the current animation on time
+            val delay = (500f / cat.anim.fps).toLong().coerceIn(40L, 250L)
             Choreographer.getInstance().postFrameCallbackDelayed(this, delay)
         }
     }

@@ -194,7 +194,7 @@ class CatBrainTest {
             assertEquals(CatBrain.State.PET, b.state)
             b.calm = false
             var moved = false
-            b.run(30f) { if (abs(it.x - x0) > 1f) moved = true }
+            b.run(90f) { if (abs(it.x - x0) > 1f) moved = true }
             assertTrue(moved, "seed $seed never moved after calm mode ended")
         }
     }
@@ -206,5 +206,113 @@ class CatBrainTest {
         b.resize(w, 1500f, size)
         b.run(3f)
         assertEquals(1500f - size, b.y, 0.5f)
+    }
+
+    /** Step the brain in coarse steps; enough for timers measured in minutes or hours. */
+    private fun CatBrain.fastForward(seconds: Float, each: (CatBrain) -> Unit = {}) {
+        var t = 0f
+        while (t < seconds) {
+            update(0.05f)
+            each(this)
+            t += 0.05f
+        }
+    }
+
+    @Test
+    fun aBallRollsInEveryHourOrTwoAndRollsAwayAfterAMinuteOrTwo() {
+        for (seed in 1..5) {
+            val b = brain(seed)
+            var t = 0f
+            while (b.ball == null && t < 7300f) {
+                b.update(0.05f)
+                t += 0.05f
+            }
+            assertTrue(t in 3600f..7205f, "seed $seed: ball arrived after ${t}s")
+            var played = false
+            var visit = 0f
+            var sawLeave = false
+            while (b.ball != null && visit < 200f) {
+                b.update(1f / 60f)
+                visit += 1f / 60f
+                if (b.state == CatBrain.State.PLAY) played = true
+                if (b.ball?.leaving == true) sawLeave = true
+                assertInBounds(b)
+            }
+            assertTrue(played, "seed $seed never played with the ball")
+            assertTrue(sawLeave, "seed $seed: the ball never rolled away")
+            assertTrue(b.ball == null && visit < 150f, "seed $seed: ball stayed ${visit}s")
+            assertTrue(b.ballTimer >= 3500f, "seed $seed: next ball due too soon (${b.ballTimer}s)")
+        }
+    }
+
+    @Test
+    fun noBallWhenBallPlayIsOff() {
+        val b = brain()
+        b.enabled = Behavior.entries.toSet() - Behavior.BALL
+        b.fastForward(4f * 3600f) { assertTrue(it.ball == null) }
+    }
+
+    @Test
+    fun turningBallPlayOffSendsTheBallAway() {
+        val b = brain()
+        b.giveBall()
+        b.run(5f)
+        b.enabled = Behavior.entries.toSet() - Behavior.BALL
+        b.run(20f)
+        assertTrue(b.ball == null)
+        assertTrue(b.state != CatBrain.State.PLAY)
+    }
+
+    @Test
+    fun cyclesThroughEveryActivity() {
+        val wanted = setOf(
+            CatBrain.State.WALK, CatBrain.State.GROOM, CatBrain.State.STRETCH,
+            CatBrain.State.YAWN, CatBrain.State.SCRATCH,
+        )
+        for (seed in 1..5) {
+            val b = brain(seed)
+            val seen = HashSet<CatBrain.State>()
+            // keep her awake: someone is touching the screen now and then
+            var t = 0f
+            b.run(240f) {
+                t += 1f / 60f
+                seen.add(it.state)
+                if (t > 20f) { it.onNotice(); t = 0f }
+                assertInBounds(it)
+            }
+            assertTrue(seen.containsAll(wanted), "seed $seed only did $seen")
+        }
+    }
+
+    @Test
+    fun switchedOffBehavioursNeverHappen() {
+        for (seed in 1..5) {
+            val b = brain(seed)
+            b.enabled = setOf(Behavior.GROOM, Behavior.YAWN)
+            val x0 = b.x
+            b.run(2f) // finish the opening state
+            b.run(600f) {
+                val s = it.state
+                assertTrue(
+                    s == CatBrain.State.IDLE || s == CatBrain.State.GROOM || s == CatBrain.State.YAWN,
+                    "seed $seed was $s",
+                )
+                assertEquals(x0, it.x, 0.5f)
+            }
+        }
+    }
+
+    @Test
+    fun newAnimationsHoldTheirLastFrameAndLoopWhereTheyShould() {
+        val b = brain()
+        b.enabled = setOf(Behavior.STRETCH)
+        var maxFrame = 0
+        b.run(120f) {
+            if (it.anim == Anim.STRETCH) {
+                assertTrue(it.frame < Anim.STRETCH.frames)
+                maxFrame = maxOf(maxFrame, it.frame)
+            }
+        }
+        assertEquals(Anim.STRETCH.frames - 1, maxFrame)
     }
 }

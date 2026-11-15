@@ -1,7 +1,10 @@
 package dev.screenbuddy.core
 
-/** Animations the cat can play. Frames are 32x32 ARGB pixel grids drawn in code. */
-enum class Anim(val frames: Int, val fps: Float) {
+/**
+ * Animations the cat can play. Frames are 32x32 ARGB pixel grids drawn in code. An animation
+ * that does not [loops] plays once and holds its last frame.
+ */
+enum class Anim(val frames: Int, val fps: Float, val loops: Boolean = true) {
     IDLE(8, 3f),
     WALK(4, 8f),
     RUN(4, 14f),
@@ -14,6 +17,11 @@ enum class Anim(val frames: Int, val fps: Float) {
     DRAG(2, 5f),
     WATCH(2, 2.5f),
     SWAT(2, 8f),
+    LICK(4, 4f),
+    WASH(4, 5f),
+    STRETCH(6, 2f, loops = false),
+    YAWN(5, 2.5f, loops = false),
+    SCRATCH(2, 10f),
 }
 
 object Sprites {
@@ -140,8 +148,89 @@ object Sprites {
                 hang(g, swing = i)
                 g.outline()
             }
+            Anim.LICK -> {
+                front(g, Eyes.CLOSED, tail = i / 2)
+                // near front paw raised to the mouth, tongue flicking over it
+                val up = if (i % 2 == 0) 0 else 1
+                frontPawUp(g, px = 15, py = 19 - up)
+                if (i % 2 == 1) g.rect(16, 18 - up, 17, 19 - up, PINK)
+                g.outline()
+            }
+            Anim.WASH -> {
+                front(g, Eyes.CLOSED, tail = i / 2)
+                // the damp paw sweeps over the cheek and up behind the ear
+                val path = arrayOf(intArrayOf(17, 16), intArrayOf(18, 13), intArrayOf(19, 10), intArrayOf(18, 13))
+                frontPawUp(g, px = path[i][0], py = path[i][1])
+                g.outline()
+            }
+            Anim.STRETCH -> {
+                when (i) {
+                    0, 5 -> side(g, legs = 6, tail = 0, bob = 0)
+                    1, 4 -> bow(g, depth = 1, eyes = Eyes.OPEN)
+                    else -> bow(g, depth = 2, eyes = Eyes.CLOSED)
+                }
+                g.outline()
+            }
+            Anim.YAWN -> {
+                front(g, if (i == 0 || i == 4) Eyes.OPEN else Eyes.CLOSED, tail = 0)
+                when (i) {
+                    1, 3 -> { g.rect(14, 16, 17, 18, OUTLINE); g.rect(15, 17, 16, 18, PINK) }
+                    2 -> { g.rect(13, 15, 18, 19, OUTLINE); g.rect(14, 16, 17, 19, PINK); g.rect(14, 15, 14, 16, WHITE); g.rect(17, 15, 17, 16, WHITE) }
+                }
+                g.outline()
+            }
+            Anim.SCRATCH -> {
+                front(g, Eyes.HAPPY, tail = 1)
+                // hind leg kicked up beside the head, paw shaking against the ear
+                val up = if (i == 0) 0 else 2
+                g.rect(20, 23, 25, 28, FUR) // haunch
+                g.rect(21, 22, 24, 22, OUTLINE)
+                g.rect(24, 9 - up, 26, 23, FUR) // shin
+                g.rect(23, 11 - up, 23, 21, OUTLINE)
+                g.rect(26, 11 - up, 26, 23, STRIPE)
+                g.rect(24, 7 - up, 26, 9 - up, CREAM) // paw
+                g.set(25, 7 - up, OUTLINE)
+                g.outline()
+            }
         }
         return g
+    }
+
+    /** The near front paw lifted off the floor to ([px], [py]), the top-left of the 4x3 paw. */
+    private fun frontPawUp(g: Grid, px: Int, py: Int) {
+        // the paw no longer rests on the floor
+        g.rect(18, 29, 20, 30, FUR)
+        // foreleg from the chest up to the paw, outlined so it reads against the cream chest
+        g.rect(px + 1, py + 3, px + 3, 27, FUR)
+        g.rect(px, py + 3, px, 27, OUTLINE)
+        g.rect(px + 4, py + 3, px + 4, 27, OUTLINE)
+        g.rect(px + 3, py + 4, px + 3, 27, STRIPE)
+        // the paw itself, with an outline and a toe line
+        g.rect(px - 1, py - 1, px + 4, py + 3, OUTLINE)
+        g.rect(px, py, px + 3, py + 2, CREAM)
+        g.set(px + 2, py, OUTLINE)
+    }
+
+    /** Play bow: front stretched out low along the floor, hindquarters up, tail high. */
+    private fun bow(g: Grid, depth: Int, eyes: Eyes) {
+        val d = depth
+        // tail straight up
+        g.rect(3, 4 + d, 4, 13, FUR)
+        g.rect(3, 4 + d, 4, 5 + d, STRIPE)
+        // hind legs, straight
+        g.rect(6, 21, 7, 30, STRIPE); g.rect(6, 30, 7, 30, STRIPE)
+        g.rect(9, 21, 10, 30, FUR); g.rect(9, 30, 10, 30, CREAM)
+        // back sloping down from the raised rear to the chest
+        g.rect(4, 13, 12, 21, FUR)
+        g.rect(10, 15 + d, 18, 23 + d, FUR)
+        g.rect(16, 18 + d, 21, 25 + d, FUR)
+        for (sx in intArrayOf(6, 9, 12)) g.rect(sx, 13 + (sx - 6) / 2, sx, 15 + (sx - 6) / 2, STRIPE)
+        g.rect(8, 21, 15, 21, CREAM)
+        // forelegs reaching forward flat on the floor
+        g.rect(16, 28, 27 + d, 29, FUR)
+        g.rect(28 + d, 28, 29 + d, 29, CREAM)
+        g.rect(15, 30, 26 + d, 30, STRIPE)
+        head(g, 14, 15 + d, eyes)
     }
 
     private fun eye(g: Grid, x: Int, y: Int, eyes: Eyes) {

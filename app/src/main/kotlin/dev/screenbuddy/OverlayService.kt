@@ -24,20 +24,19 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel("cat", "Cat on screen", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(CHANNEL, "Companion on screen", NotificationManager.IMPORTANCE_MIN)
+        channel.setShowBadge(false)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
-        val ball = PendingIntent.getService(
-            this, 1, Intent(this, OverlayService::class.java).setAction(ACTION_BALL), PendingIntent.FLAG_IMMUTABLE,
-        )
-        val notification = Notification.Builder(this, "cat")
-            .setSmallIcon(android.R.drawable.star_on)
-            .setContentTitle("The cat is on your screen")
-            .setContentText("Tap Wool ball to throw her a ball, or to take it away again.")
+        val name = Prefs.species(Prefs.of(this)).petName
+        val notification = Notification.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_paw)
+            .setColor(getColor(R.color.gold))
+            .setContentTitle("$name is keeping you company")
+            .setContentText("Tap to change what she gets up to.")
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "Wool ball", ball).build())
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 34) {
@@ -57,10 +56,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         watcher.start()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_BALL) host?.toggleBall()
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
         Prefs.of(this).unregisterOnSharedPreferenceChangeListener(this)
@@ -81,6 +77,6 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     companion object {
-        const val ACTION_BALL = "dev.screenbuddy.action.BALL"
+        private const val CHANNEL = "companion"
     }
 }

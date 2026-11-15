@@ -1,59 +1,44 @@
 # Screen Buddy
 
-A pixel cat that lives on top of your Android screen. It wanders along the bottom edge, runs
-after things you tap, climbs onto the keyboard, naps when you leave it alone, and can be petted,
-carried and tossed. Pull down the notification tray and a ball of wool drops in for it to play
-with.
+A pixel companion that lives on top of your Android screen. Today that is Marmalade, a ginger
+tabby; dogs and bunnies are planned.
 
-## Two builds
+She wanders along the bottom edge, grooms herself, stretches, yawns, scratches behind her ear,
+hops onto the keyboard while you type, and naps when you leave her alone. Tap her to pet her,
+drag her to carry her, and let go mid-swipe to toss her. Every hour or two of screen time a
+ball of wool rolls in; she plays with it for a minute or two, then bats it off the screen.
 
-| | Lite | Full |
-|---|---|---|
-| Installs by opening the APK on the phone | Yes | No – Play Protect blocks it |
-| Permission | Display over other apps | Accessibility service |
-| Pet, carry, toss, wander, nap | Yes | Yes |
-| Runs after things you tap | No – it only knows the screen was touched | Yes |
-| Jumps onto the keyboard | On most phones (uses a workaround) | Yes |
-| Calm mode: sits still in busy apps (Chrome, YouTube… or every app) | No – it cannot tell which app is open | Yes |
-| Wool ball | From a button on its notification or in the app | Drops in when the notification tray opens |
-
-Both are built by every run under the repository's **Actions** tab (`screen-buddy-lite-apk`
-and `screen-buddy-full-apk`) and can be installed side by side.
+Every behaviour can be switched off in the app.
 
 ## Install
 
-**Lite:** open `app-lite-debug.apk` on the phone, open Screen Buddy Lite, and allow it to
-display over other apps.
+Open `app-debug.apk` on the phone (it is built by every run under the repository's **Actions**
+tab, as `screen-buddy-apk`), open Screen Buddy, tap **Invite Marmalade onto your screen**, and
+allow it to display over other apps.
 
-**Full:** Google Play Protect refuses to install unknown apps that contain an accessibility
-service when the APK is opened from a browser, chat or file manager. Install it from a computer
-instead, with USB debugging turned on:
-
-```
-adb install app-full-debug.apk
-```
-
-Then open Screen Buddy and tap **Open accessibility settings**, and turn on Screen Buddy. If
-Android says the setting is restricted, open the app's **App info** page, tap the three-dot
-menu, choose **Allow restricted settings**, and retry.
-
-The full build uses the accessibility service for two things: drawing over other apps, and
-learning where on the screen you tapped. It uses only the position of taps and the keyboard; it
-never reads, stores or sends what is on your screen. Neither build has internet permission.
+Screen Buddy uses only the "Display over other apps" permission and a quiet notification that
+keeps it running. It has no internet permission and never reads what is on your screen; it
+only learns that the screen was touched, not where.
 
 ## Build
 
 ```
-./gradlew :app:assembleDebug     # both builds; needs the Android SDK
+./gradlew :app:assembleDebug     # needs the Android SDK
 ./gradlew -PnoAndroid :core:test # behaviour and sprite tests, no SDK needed
 ```
 
 ## Layout
 
-- `core/` – plain Kotlin: the sprites (drawn in code, `Sprites.kt`) and the cat's behaviour and
-  physics (`CatBrain.kt`), with unit tests. The sprite test writes a preview sheet to
-  `core/build/sprites.png`.
-- `app/src/main` – shared Android code: `CatHost` (overlay window and frame loop), `CatView`
-  (drawing and touch), `MainActivity` (setup and settings).
-- `app/src/full` – `BuddyService`, the accessibility service that reports tap positions.
-- `app/src/lite` – `OverlayService`, a foreground service using a plain overlay window.
+- `core/` – plain Kotlin, with unit tests:
+  - `Sprites.kt` – every frame, drawn in code. The sprite test writes a preview sheet to
+    `core/build/sprites.png`.
+  - `CatBrain.kt` – behaviour and physics. Idle activities come from a shuffled bag, so each
+    enabled one comes up before any repeats.
+  - `Behavior.kt` – the behaviours the user can switch off.
+  - `Species.kt` – the companions the app knows about; only the cat is available so far.
+- `app/` – Android:
+  - `OverlayService` – foreground service holding the overlay window.
+  - `CatHost` – overlay windows and the frame loop. `SpriteView` draws a sprite and handles
+    touches. `KeyboardWatcher` finds the top of the on-screen keyboard.
+  - `MainActivity` – the settings screen, with a live preview (`PreviewView`) and the house
+    style (`Lux`).

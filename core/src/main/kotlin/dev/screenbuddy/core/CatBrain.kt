@@ -18,7 +18,7 @@ class CatBrain(
     size: Float,
     private val rng: Random = Random.Default,
 ) {
-    enum class State { IDLE, WALK, ALERT, CHASE, PLAY, AIR, LAND, PET, SLEEP, DRAG }
+    enum class State { IDLE, WALK, ALERT, CHASE, PLAY, AIR, LAND, PET, SLEEP, DRAG, GROOM, STRETCH, YAWN, SCRATCH }
 
     var worldW = worldW
         private set
@@ -40,6 +40,21 @@ class CatBrain(
     var chaseEnabled = true
 
     /**
+     * The things she is allowed to do by herself. Turning [Behavior.BALL] off while she is
+     * playing sends the ball rolling away.
+     */
+    var enabled: Set<Behavior> = Behavior.entries.toSet()
+        set(value) {
+            field = value
+            if (Behavior.BALL !in value) {
+                ball?.let { if (!it.leaving) sendBallAway() }
+            }
+            if (Behavior.WANDER !in value && state == State.WALK) enter(State.IDLE)
+        }
+
+    private fun can(b: Behavior) = b in enabled
+
+    /**
      * Calm mode, for when a demanding app is open: she stops wandering, chasing and playing, and
      * sits or naps so her window stays still. Petting, carrying and the keyboard still work.
      */
@@ -58,6 +73,17 @@ class CatBrain(
         private set
 
     private var playLeft = 0f
+
+    /** Seconds of play left before she bats the ball off the screen for good. */
+    private var sessionLeft = 0f
+
+    /** Seconds of screen-on time until a ball rolls in by itself. */
+    var ballTimer = nextBallDelay()
+        private set
+
+    /** Upcoming idle activities; every enabled one comes up once before any repeats. */
+    private val bag = ArrayList<Behavior>()
+    private var lastActivity: Behavior? = null
     private var swatCooldown = 0f
     private var playMoving = false
     private var poseHold = 0f
@@ -89,9 +115,20 @@ class CatBrain(
             State.PET -> Anim.PET
             State.SLEEP -> Anim.SLEEP
             State.DRAG -> Anim.DRAG
+            State.GROOM -> if (stateTime < stateDur * 0.55f) Anim.LICK else Anim.WASH
+            State.STRETCH -> Anim.STRETCH
+            State.YAWN -> Anim.YAWN
+            State.SCRATCH -> Anim.SCRATCH
         }
 
-    val frame: Int get() = (stateTime * anim.fps).toInt() % anim.frames
+    val frame: Int
+        get() {
+            val a = anim
+            // the second half of grooming starts its own animation from the first frame
+            val t = if (state == State.GROOM && a == Anim.WASH) stateTime - stateDur * 0.55f else stateTime
+            val f = (t * a.fps).toInt()
+            return if (a.loops) f % a.frames else f.coerceAtMost(a.frames - 1)
+        }
 
     /** True while the cat is moving and wants to be ticked every display frame. */
     val isBusy: Boolean
@@ -107,20 +144,50 @@ class CatBrain(
         if (state != State.DRAG && state != State.AIR && y < standY - 1f) enter(State.AIR)
     }
 
-    /** A ball of wool drops in from the top of the screen. */
-    fun giveBall() {
+    /**
+     * A ball of wool arrives: it drops in from the top of the screen, or with [rollIn] it rolls
+     * in from one side. She plays with it for one to two minutes, then bats it away.
+     */
+    fun giveBall(rollIn: Boolean = false) {
         if (ball != null) return
         val d = size * Sprites.BALL_SIZE / Sprites.SIZE
-        ball = Ball((0.2f + rng.nextFloat() * 0.6f) * (worldW - d), 0f, d).also {
-            it.kick((rng.nextFloat() - 0.5f) * 3f * size, 0f)
+        ball = if (rollIn) {
+            val fromLeft = rng.nextBoolean()
+            val speed = worldW * (0.6f + rng.nextFloat() * 0.4f)
+            Ball(if (fromLeft) -d else worldW, floor - d, d).also {
+                it.entering = true
+                it.kick(if (fromLeft) speed else -speed, 0f)
+            }
+        } else {
+            Ball((0.2f + rng.nextFloat() * 0.6f) * (worldW - d), 0f, d).also {
+                it.kick((rng.nextFloat() - 0.5f) * 3f * size, 0f)
+            }
         }
         playLeft = 15f + rng.nextFloat() * 15f
-        if (!calm && state != State.DRAG && state != State.AIR && state != State.ALERT) enter(State.ALERT, 0.5f)
+        sessionLeft = 60f + rng.nextFloat() * 60f
+        if (!calm && state != State.DRAG && state != State.AIR && state != State.ALERT) {
+            hasTarget = false
+            enter(State.ALERT, 0.5f)
+        }
     }
 
     fun takeBall() {
         ball = null
+        ballTimer = nextBallDelay()
         if (state == State.PLAY) enter(State.IDLE)
+    }
+
+    private fun nextBallDelay() = 3600f + rng.nextFloat() * 3600f
+
+    /** The ball, if she may still play with it (it is not on its way out). */
+    private val playBall: Ball? get() = ball?.takeIf { !it.leaving && playLeft > 0f }
+
+    /** Send the ball rolling off whichever edge is farther from her, so she can watch it go. */
+    private fun sendBallAway() {
+        val b = ball ?: return
+        val dir = if (b.centerX >= x + size / 2f) 1f else -1f
+        b.leave(dir)
+        if (!b.held) b.kick(dir * 12f * b.d, -4f * b.d)
     }
 
     fun ballGrab() {
@@ -154,7 +221,7 @@ class CatBrain(
         val dt = dtSeconds.coerceIn(0f, 0.05f)
         stateTime += dt
         quietTime += dt
-        ball?.update(dt, worldW, floor, gravity)
+        updateBall(dt)
         // the floor rose above the cat (the keyboard opened): look up, then jump onto it
         if (y > standY + 1f && state != State.AIR && state != State.DRAG && state != State.ALERT) {
             hasTarget = false
@@ -163,17 +230,16 @@ class CatBrain(
         when (state) {
             State.IDLE -> if (stateTime >= stateDur) {
                 when {
-                    calm -> if (rng.nextFloat() < 0.3f) enter(State.SLEEP, 40f + rng.nextFloat() * 80f) else enter(State.IDLE)
-                    ball != null && playLeft > 0f -> startPlay()
-                    quietTime > 40f && rng.nextFloat() < 0.5f -> enter(State.SLEEP, 40f + rng.nextFloat() * 80f)
-                    rng.nextFloat() < 0.65f -> {
-                        walkTo = rng.nextFloat() * maxX
-                        enter(State.WALK)
-                    }
+                    calm -> if (can(Behavior.NAP) && rng.nextFloat() < 0.3f) nap() else enter(State.IDLE)
+                    playBall != null -> startPlay()
+                    can(Behavior.NAP) && quietTime > 40f && rng.nextFloat() < 0.5f -> nap()
+                    rng.nextFloat() < 0.7f -> startActivity()
                     else -> enter(State.IDLE)
                 }
             }
             State.WALK -> if (moveToward(walkTo, 0.8f * size * dt)) enter(State.IDLE)
+            State.GROOM, State.STRETCH, State.YAWN, State.SCRATCH ->
+                if (stateTime >= stateDur) enter(State.IDLE, 1f + rng.nextFloat() * 3f)
             State.ALERT -> if (stateTime >= stateDur) {
                 when {
                     y > standY + 1f -> {
@@ -183,7 +249,7 @@ class CatBrain(
                         enterAir()
                     }
                     calm -> enter(State.IDLE)
-                    ball != null && playLeft > 0f -> startPlay()
+                    playBall != null -> startPlay()
                     hasTarget && chaseEnabled -> enter(State.CHASE)
                     else -> enter(State.IDLE)
                 }
@@ -192,7 +258,7 @@ class CatBrain(
             State.CHASE -> chase(dt)
             State.AIR -> fly(dt)
             State.LAND -> if (stateTime >= 0.25f) {
-                if (ball != null && playLeft > 0f && !calm) startPlay() else enter(State.IDLE)
+                if (playBall != null && !calm) startPlay() else enter(State.IDLE)
             }
             State.PET -> if (stateTime >= 1.6f) enter(State.IDLE)
             State.SLEEP -> if (stateTime >= stateDur) enter(State.IDLE)
@@ -217,7 +283,7 @@ class CatBrain(
     /** The user touched or scrolled somewhere, but we don't know where. */
     fun onNotice() {
         quietTime = 0f
-        if (!calm && state == State.IDLE && rng.nextFloat() < 0.25f) {
+        if (!calm && can(Behavior.NOTICE) && state == State.IDLE && rng.nextFloat() < 0.25f) {
             hasTarget = false
             enter(State.ALERT, 0.5f)
         }
@@ -258,6 +324,69 @@ class CatBrain(
         state = next
         stateTime = 0f
         stateDur = duration
+    }
+
+    private fun nap() = enter(State.SLEEP, 40f + rng.nextFloat() * 80f)
+
+    /** Do the next thing from the bag: wander, groom, stretch, yawn or scratch. */
+    private fun startActivity() {
+        val next = nextActivity() ?: return enter(State.IDLE)
+        lastActivity = next
+        when (next) {
+            Behavior.WANDER -> {
+                walkTo = rng.nextFloat() * maxX
+                enter(State.WALK)
+            }
+            Behavior.GROOM -> enter(State.GROOM, 4f + rng.nextFloat() * 3f)
+            Behavior.STRETCH -> enter(State.STRETCH, Anim.STRETCH.frames / Anim.STRETCH.fps)
+            Behavior.YAWN -> enter(State.YAWN, Anim.YAWN.frames / Anim.YAWN.fps)
+            Behavior.SCRATCH -> enter(State.SCRATCH, 1.5f + rng.nextFloat() * 1.2f)
+            else -> enter(State.IDLE)
+        }
+    }
+
+    private fun nextActivity(): Behavior? {
+        bag.removeAll { !can(it) }
+        if (bag.isEmpty()) {
+            val fresh = ArrayList<Behavior>()
+            for (b in Behavior.ACTIVITIES) if (can(b)) {
+                fresh.add(b)
+                if (b == Behavior.WANDER) fresh.add(b) // she walks about more often than she stretches
+            }
+            if (fresh.isEmpty()) return null
+            fresh.shuffle(rng)
+            // don't do the same thing twice in a row across a refill
+            if (fresh.size > 1 && fresh.last() == lastActivity) fresh.add(0, fresh.removeAt(fresh.size - 1))
+            bag.addAll(fresh)
+        }
+        return bag.removeAt(bag.size - 1)
+    }
+
+    private fun updateBall(dt: Float) {
+        val b = ball
+        if (b == null) {
+            if (!can(Behavior.BALL) || calm) return
+            ballTimer -= dt
+            if (ballTimer <= 0f) {
+                // wait until she is on her feet and not in someone's hand
+                if (state == State.DRAG || state == State.AIR || state == State.PET || y > standY + 1f) {
+                    ballTimer = 5f
+                } else {
+                    giveBall(rollIn = true)
+                }
+            }
+            return
+        }
+        b.update(dt, worldW, floor, gravity)
+        if (b.isGone(worldW)) {
+            takeBall()
+            return
+        }
+        if (!b.leaving) {
+            sessionLeft -= dt
+            // she gets a moment to give it one last bat; otherwise it wanders off on its own
+            if (sessionLeft <= 0f && (state != State.PLAY || sessionLeft < -8f)) sendBallAway()
+        }
     }
 
     private fun startPlay() {
@@ -310,6 +439,14 @@ class CatBrain(
         val b = ball
         playLeft -= dt
         swatCooldown -= dt
+        swatTime -= dt
+        if (b != null && b.leaving) {
+            // sit tight and watch it roll away
+            playMoving = false
+            val dx = b.centerX - (x + size / 2f)
+            if (abs(dx) > size * 0.3f) facingRight = dx > 0f
+            return
+        }
         if (b == null || playLeft <= 0f) {
             // bored for a few seconds; idling ends by going back to the ball
             playLeft = 10f + rng.nextFloat() * 10f
@@ -317,7 +454,6 @@ class CatBrain(
             return
         }
         poseHold -= dt
-        swatTime -= dt
         val dx = b.centerX - (x + size / 2f)
         val adx = abs(dx)
         // Only set off after the ball once it is clearly out of reach, and keep each pose for a
@@ -337,6 +473,15 @@ class CatBrain(
         }
         val withinReach = adx < size * 0.6f && b.centerY > y - size * 0.2f
         val settled = playMoving || poseHold <= 0.15f // no bat in the instant after stopping
+        if (withinReach && settled && swatCooldown <= 0f && !b.held && sessionLeft <= 0f) {
+            // playtime is over: one last big bat sends it off the screen
+            facingRight = dx > 0f
+            playMoving = false
+            swatTime = 0.3f
+            sendBallAway()
+            b.kick(b.leaveDir * 14f * b.d, -(6f + rng.nextFloat() * 3f) * size)
+            return
+        }
         if (withinReach && settled && swatCooldown <= 0f && !b.held) {
             val dir = when {
                 b.centerX < worldW * 0.2f -> 1f
@@ -383,7 +528,7 @@ class CatBrain(
                 vx = 0f
                 vy = 0f
                 // mid-game she lands on her feet and keeps going, without the sit-down squash
-                if (ball != null && playLeft > 0f && !calm) startPlay() else enter(State.LAND)
+                if (playBall != null && !calm) startPlay() else enter(State.LAND)
             }
         }
     }

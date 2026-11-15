@@ -2,143 +2,328 @@ package dev.screenbuddy
 
 import android.app.Activity
 import android.content.Intent
+import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
+import android.view.WindowInsets
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.ScrollView
-import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
+import dev.screenbuddy.core.Anim
+import dev.screenbuddy.core.Behavior
+import dev.screenbuddy.core.Species
+import dev.screenbuddy.core.Sprites
 
-/** Setup and settings: turn the service on, show or hide the cat, pick its size. */
+/** The companion's home: a live preview, permission, and everything she is allowed to do. */
 class MainActivity : Activity() {
 
+    private lateinit var prefs: SharedPreferences
+    private lateinit var preview: PreviewView
+    private lateinit var caption: TextView
     private lateinit var status: TextView
-    private lateinit var enable: Button
+    private lateinit var invite: View
+    private lateinit var showRow: View
+    private lateinit var showSwitch: LuxSwitch
+
+    private val match = ViewGroup.LayoutParams.MATCH_PARENT
+    private val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
+    private fun dp(v: Float) = Lux.dpi(this, v)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val prefs = Prefs.of(this)
-        val pad = (20 * resources.displayMetrics.density).toInt()
+        prefs = Prefs.of(this)
+        val species = Prefs.species(prefs)
 
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-        fun add(v: View, topMargin: Int = pad / 2) = column.addView(
-            v,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { this.topMargin = topMargin },
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun add(v: View, top: Float = 0f, height: Int = wrap) = column.addView(
+            v, LinearLayout.LayoutParams(match, height).apply { topMargin = dp(top) },
         )
 
-        add(TextView(this).apply { text = getString(R.string.app_name); textSize = 28f }, 0)
-        status = TextView(this).apply { textSize = 16f }
-        add(status)
-        enable = Button(this).apply {
-            text = Setup.BUTTON
-            setOnClickListener { Setup.openSettings(this@MainActivity) }
+        // --- heading ---
+        add(Lux.eyebrow(this, "Screen Buddy"), 8f)
+        add(Lux.text(this, species.petName, 38f, face = Lux.SERIF), 6f)
+        add(Lux.text(this, "Your ginger tabby, at home on your screen", 15f, Lux.MUTED, Lux.LIGHT), 2f)
+
+        // --- the stage ---
+        add(stage(), 24f, dp(280f))
+
+        // --- permission, or the switch to show her ---
+        invite = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(Lux.goldButton(this@MainActivity, "Invite ${species.petName} onto your screen") {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            }, LinearLayout.LayoutParams(match, wrap))
+            addView(Lux.text(this@MainActivity,
+                "Allow Screen Buddy to display over other apps, then come back here.",
+                13f, Lux.MUTED, Lux.LIGHT,
+            ).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(10f) })
         }
-        add(enable)
-        add(TextView(this).apply {
-            text = Setup.HINT
-            textSize = 13f
-            alpha = 0.7f
-        })
-
-        add(Switch(this).apply {
-            text = "Show the cat"
-            textSize = 16f
-            isChecked = Prefs.show(prefs)
-            setOnCheckedChangeListener { _, on ->
-                prefs.edit().putBoolean(Prefs.SHOW, on).apply()
-                Setup.sync(this@MainActivity)
-            }
-        }, pad)
-        if (Setup.CAN_CHASE) add(Switch(this).apply {
-            text = "Chase my taps"
-            textSize = 16f
-            isChecked = Prefs.chase(prefs)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(Prefs.CHASE, on).apply() }
-        })
-
-        if (Setup.CAN_CHASE) add(Switch(this).apply {
-            text = "Wool ball in the notification tray"
-            textSize = 16f
-            isChecked = Prefs.ball(prefs)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(Prefs.BALL, on).apply() }
-        })
-
-        Setup.BALL_BUTTON?.let { label ->
-            add(Button(this).apply {
-                text = label
-                setOnClickListener { Setup.toggleBall(this@MainActivity) }
-            })
+        add(invite, 20f)
+        showSwitch = LuxSwitch(this, Prefs.show(prefs)) { on ->
+            prefs.edit().putBoolean(Prefs.SHOW, on).apply()
+            refresh()
         }
-
-        if (Setup.CAN_SEE_APPS) {
-            add(TextView(this).apply { text = "Stay calm in busy apps"; textSize = 16f }, pad)
-            add(TextView(this).apply {
-                text = "She sits or naps instead of running around, so she doesn't slow those apps down."
-                textSize = 13f
-                alpha = 0.7f
-            }, 0)
-            val modes = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-            val choose = Button(this).apply {
-                text = "Choose apps"
-                setOnClickListener { startActivity(Intent(this@MainActivity, AppPickerActivity::class.java)) }
-            }
-            val options = arrayOf(
-                Prefs.CALM_LISTED to "In apps I choose",
-                Prefs.CALM_ALL to "In every app (she plays only on the home screen)",
-                Prefs.CALM_NEVER to "Never",
-            )
-            for ((mode, label) in options) {
-                modes.addView(RadioButton(this).apply {
-                    id = View.generateViewId()
-                    text = label
-                    isChecked = Prefs.calmMode(prefs) == mode
-                    setOnClickListener {
-                        prefs.edit().putString(Prefs.CALM_MODE, mode).apply()
-                        choose.isEnabled = mode == Prefs.CALM_LISTED
-                    }
-                })
-            }
-            choose.isEnabled = Prefs.calmMode(prefs) == Prefs.CALM_LISTED
-            add(modes, 0)
-            add(choose, 0)
+        showRow = toggleRow("On your screen", "Hide her for a while without changing anything else.", showSwitch).apply {
+            background = Lux.card(this@MainActivity)
+            setPadding(dp(20f), dp(18f), dp(20f), dp(18f))
         }
+        add(showRow, 20f)
 
-        add(TextView(this).apply { text = "Size"; textSize = 16f }, pad)
-        val sizes = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL; gravity = Gravity.START }
-        val labels = arrayOf("Small", "Medium", "Large")
-        Prefs.SCALES.forEachIndexed { i, scale ->
-            sizes.addView(RadioButton(this).apply {
-                id = View.generateViewId()
-                text = labels[i]
-                isChecked = Prefs.scale(prefs) == scale
-                setOnClickListener { prefs.edit().putInt(Prefs.SCALE, scale).apply() }
-            })
+        // --- companion ---
+        add(Lux.eyebrow(this, "Companion"), 36f)
+        add(companions(species), 14f)
+
+        // --- size ---
+        add(Lux.eyebrow(this, "Size"), 36f)
+        add(sizes(), 14f)
+
+        // --- behaviours ---
+        add(Lux.eyebrow(this, "Behaviours"), 36f)
+        add(Lux.text(this, "She moves between these by herself, one after another.", 13f, Lux.MUTED, Lux.LIGHT), 6f)
+        add(behaviours(), 14f)
+
+        // --- gestures ---
+        add(Lux.eyebrow(this, "Together"), 36f)
+        add(gestures(), 14f)
+
+        add(Lux.text(this,
+            "Screen Buddy has no internet access and never reads what is on your screen.",
+            12f, Lux.FAINT, Lux.LIGHT,
+        ).apply { gravity = Gravity.CENTER }, 36f)
+        add(Lux.text(this, "Version ${packageManager.getPackageInfo(packageName, 0).versionName}", 12f, Lux.FAINT, Lux.LIGHT)
+            .apply { gravity = Gravity.CENTER }, 4f)
+
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(Lux.INK)
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+            addView(column)
         }
-        add(sizes, 0)
-
-        add(TextView(this).apply {
-            text = Setup.HOW_TO
-            textSize = 14f
-            alpha = 0.8f
-        }, pad)
-
-        setContentView(ScrollView(this).apply { addView(column) })
+        // draw behind the system bars, but keep content clear of them
+        val side = dp(22f)
+        scroll.setOnApplyWindowInsetsListener { v, insets ->
+            val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            v.setPadding(side + bars.left, dp(20f) + bars.top, side + bars.right, dp(32f) + bars.bottom)
+            insets
+        }
+        window.setDecorFitsSystemWindows(false)
+        setContentView(scroll)
     }
 
     override fun onResume() {
         super.onResume()
-        val ready = Setup.isReady(this)
-        status.text = if (ready) Setup.READY else Setup.NOT_READY
-        enable.visibility = if (ready && !Setup.CAN_CHASE) View.GONE else View.VISIBLE
-        Setup.sync(this)
+        refresh()
+    }
+
+    private fun ready() = Settings.canDrawOverlays(this)
+
+    /** Bring the screen in line with the permission and settings, and start the overlay if wanted. */
+    private fun refresh() {
+        val ready = ready()
+        invite.visibility = if (ready) View.GONE else View.VISIBLE
+        showRow.visibility = if (ready) View.VISIBLE else View.GONE
+        showSwitch.set(Prefs.show(prefs), animate = false, notify = false)
+        val on = ready && Prefs.show(prefs)
+        status.text = when {
+            !ready -> "Awaiting permission"
+            on -> "On your screen"
+            else -> "Resting"
+        }
+        status.setCompoundDrawablesRelativeWithIntrinsicBounds(dot(if (on) Lux.GOLD else Lux.FAINT), null, null, null)
+        preview.enabled = Prefs.behaviors(prefs)
+        if (on) startForegroundService(Intent(this, OverlayService::class.java))
+    }
+
+    // --- sections ---
+
+    private fun stage(): View {
+        val frame = FrameLayout(this)
+        frame.background = GradientDrawable().apply {
+            gradientType = GradientDrawable.RADIAL_GRADIENT
+            colors = intArrayOf(Lux.GLOW, Lux.SURFACE)
+            gradientRadius = Lux.dp(this@MainActivity, 200f)
+            setGradientCenter(0.5f, 0.62f)
+            cornerRadius = Lux.dp(this@MainActivity, 28f)
+            setStroke(dp(1f), Lux.HAIRLINE)
+        }
+        frame.clipToOutline = true
+        caption = Lux.text(this, "", 17f, Lux.IVORY, Lux.SERIF_ITALIC).apply { gravity = Gravity.CENTER }
+        preview = PreviewView(this) { caption.text = it }
+        preview.contentDescription = "Preview of your companion. Tap to pet her."
+        frame.addView(preview, FrameLayout.LayoutParams(match, match).apply { bottomMargin = dp(36f) })
+        frame.addView(caption, FrameLayout.LayoutParams(match, wrap, Gravity.BOTTOM).apply { bottomMargin = dp(20f) })
+        status = Lux.text(this, "", 12f, Lux.IVORY, Lux.MEDIUM).apply {
+            letterSpacing = 0.06f
+            compoundDrawablePadding = dp(8f)
+            gravity = Gravity.CENTER_VERTICAL
+            background = Lux.card(this@MainActivity, fill = 0x99141210.toInt(), radius = 20f)
+            setPadding(dp(12f), dp(6f), dp(14f), dp(6f))
+        }
+        frame.addView(status, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.START).apply {
+            leftMargin = dp(16f); topMargin = dp(16f)
+        })
+        frame.addView(Lux.text(this, "Tap to pet", 11f, Lux.FAINT, Lux.MEDIUM).apply { letterSpacing = 0.1f },
+            FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.END).apply { rightMargin = dp(18f); topMargin = dp(22f) })
+        return frame
+    }
+
+    private fun dot(color: Int) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(color)
+        setSize(dp(7f), dp(7f))
+    }
+
+    private fun companions(chosen: Species): View {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        Species.entries.forEachIndexed { i, s ->
+            val selected = s == chosen
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(dp(8f), dp(16f), dp(8f), dp(14f))
+                background = Lux.pressable(this@MainActivity, Lux.card(
+                    this@MainActivity,
+                    fill = if (selected) Lux.SURFACE_HI else Lux.SURFACE,
+                    stroke = if (selected) Lux.GOLD else Lux.HAIRLINE,
+                    radius = 20f,
+                ), 20f)
+                alpha = if (s.available) 1f else 0.55f
+                isClickable = true
+                setOnClickListener {
+                    if (!s.available) {
+                        Toast.makeText(this@MainActivity, "${s.label}s are on their way.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            val portrait: View = if (s == Species.CAT) {
+                ImageView(this).apply {
+                    setImageDrawable(BitmapDrawable(resources, Bitmap.createBitmap(
+                        Sprites.frame(Anim.IDLE, 0), Sprites.SIZE, Sprites.SIZE, Bitmap.Config.ARGB_8888,
+                    )).apply { isFilterBitmap = false })
+                }
+            } else {
+                // no artwork yet: an engraved monogram stands in
+                Lux.text(this, s.label.take(1), 26f, Lux.GOLD, Lux.SERIF).apply {
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setStroke(dp(1f), Lux.GOLD_DEEP)
+                    }
+                }
+            }
+            tile.addView(portrait, LinearLayout.LayoutParams(dp(56f), dp(56f)))
+            tile.addView(Lux.text(this, s.label, 15f, Lux.IVORY, Lux.SERIF).apply { gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(10f) })
+            tile.addView(Lux.text(this, if (s.available) (if (selected) "Selected" else s.petName) else "Coming soon",
+                11f, if (selected) Lux.GOLD else Lux.FAINT, Lux.MEDIUM).apply {
+                gravity = Gravity.CENTER
+                letterSpacing = 0.08f
+            }, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(2f) })
+            row.addView(tile, LinearLayout.LayoutParams(0, wrap, 1f).apply { if (i > 0) leftMargin = dp(10f) })
+        }
+        return row
+    }
+
+    private fun sizes(): View {
+        val labels = arrayOf("Petite", "Classic", "Grand")
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Lux.card(this@MainActivity, radius = 26f)
+            setPadding(dp(5f), dp(5f), dp(5f), dp(5f))
+        }
+        val options = ArrayList<TextView>()
+        fun paint() = options.forEachIndexed { i, v ->
+            val on = Prefs.SCALES[i] == Prefs.scale(prefs)
+            v.setTextColor(if (on) Lux.INK else Lux.MUTED)
+            v.background = if (on) GradientDrawable().apply {
+                colors = intArrayOf(0xFFE6C88A.toInt(), Lux.GOLD)
+                cornerRadius = Lux.dp(this@MainActivity, 22f)
+            } else null
+        }
+        Prefs.SCALES.forEachIndexed { i, scale ->
+            val v = Lux.text(this, labels[i], 14f, face = Lux.MEDIUM).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12f), 0, dp(12f))
+                isClickable = true
+                setOnClickListener {
+                    prefs.edit().putInt(Prefs.SCALE, scale).apply()
+                    paint()
+                }
+            }
+            options.add(v)
+            row.addView(v, LinearLayout.LayoutParams(0, wrap, 1f))
+        }
+        paint()
+        return row
+    }
+
+    private fun behaviours(): View {
+        val items = listOf(
+            Triple(Behavior.BALL, "Ball of wool", "Every hour or two a ball rolls in. She plays for a minute or two, then bats it away."),
+            Triple(Behavior.GROOM, "Grooming", "Licks her paw and washes her face."),
+            Triple(Behavior.STRETCH, "Stretching", "A long, slow stretch from nose to tail."),
+            Triple(Behavior.YAWN, "Yawning", "A big, unhurried yawn."),
+            Triple(Behavior.SCRATCH, "Ear scratching", "A quick scratch behind the ear."),
+            Triple(Behavior.WANDER, "Wandering", "Strolls along the bottom of the screen."),
+            Triple(Behavior.NAP, "Napping", "Curls up for a nap when left alone."),
+            Triple(Behavior.KEYBOARD, "Keyboard visits", "Hops up onto the keyboard while you type."),
+            Triple(Behavior.NOTICE, "Curiosity", "Perks up now and then when you touch the screen."),
+        )
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = Lux.card(this@MainActivity)
+        }
+        items.forEachIndexed { i, (b, title, detail) ->
+            if (i > 0) card.addView(View(this).apply { setBackgroundColor(Lux.HAIRLINE) },
+                LinearLayout.LayoutParams(match, dp(1f)).apply { leftMargin = dp(20f); rightMargin = dp(20f) })
+            val sw = LuxSwitch(this, Prefs.isOn(prefs, b)) { on ->
+                Prefs.setOn(prefs, b, on)
+                preview.enabled = Prefs.behaviors(prefs)
+            }
+            card.addView(toggleRow(title, detail, sw).apply { setPadding(dp(20f), dp(16f), dp(20f), dp(16f)) })
+        }
+        return card
+    }
+
+    private fun toggleRow(title: String, detail: String, sw: LuxSwitch): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            setOnClickListener { sw.toggle() }
+        }
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(Lux.text(this, title, 16f, Lux.IVORY, Lux.SERIF))
+        texts.addView(Lux.text(this, detail, 13f, Lux.MUTED, Lux.LIGHT), LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(3f) })
+        row.addView(texts, LinearLayout.LayoutParams(0, wrap, 1f).apply { rightMargin = dp(16f) })
+        row.addView(sw)
+        sw.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        sw.contentDescription = title
+        return row
+    }
+
+    private fun gestures(): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Lux.card(this@MainActivity)
+            setPadding(dp(8f), dp(18f), dp(8f), dp(18f))
+        }
+        for ((verb, what) in listOf("Tap" to "to pet her", "Drag" to "to carry her", "Fling" to "to toss her")) {
+            val cell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+            cell.addView(Lux.text(this, verb, 18f, Lux.GOLD, Lux.SERIF).apply { gravity = Gravity.CENTER })
+            cell.addView(Lux.text(this, what, 12f, Lux.MUTED, Lux.LIGHT).apply { gravity = Gravity.CENTER })
+            row.addView(cell, LinearLayout.LayoutParams(0, wrap, 1f))
+        }
+        return row
     }
 }
