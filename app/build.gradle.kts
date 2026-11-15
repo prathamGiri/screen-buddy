@@ -17,6 +17,18 @@ android {
         versionName = "0.2"
     }
 
+    // Every build signs debug APKs with this one checked-in key. Without it each CI run makes a
+    // new random key, and Android refuses to install a new APK over the previous one. It is the
+    // standard debug key (password "android"), not a secret; Play releases need a separate key.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
