@@ -14,6 +14,7 @@ with.
 | Pet, carry, toss, wander, nap | Yes | Yes |
 | Runs after things you tap | No – it only knows the screen was touched | Yes |
 | Jumps onto the keyboard | On most phones (uses a workaround) | Yes |
+| Calm mode: sits still in busy apps (Chrome, YouTube… or every app) | No – it cannot tell which app is open | Yes |
 | Wool ball | From a button on its notification or in the app | Drops in when the notification tray opens |
 
 Both are built by every run under the repository's **Actions** tab (`screen-buddy-lite-apk`

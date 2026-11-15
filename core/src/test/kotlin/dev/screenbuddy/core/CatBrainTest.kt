@@ -172,4 +172,39 @@ class CatBrainTest {
             b.run(1.5f) { assertTrue(it.state != CatBrain.State.CHASE && it.state != CatBrain.State.AIR) }
         }
     }
+
+    @Test
+    fun staysStillWhenCalm() {
+        for (seed in 1..5) {
+            val b = brain(seed)
+            b.run(1f)
+            b.giveBall()
+            b.calm = true
+            b.run(2f) // finish any jump or landing already under way
+            val x0 = b.x
+            b.onTap(100f, 500f)
+            b.onNotice()
+            b.run(120f) {
+                assertEquals(x0, it.x, 0.5f, "seed $seed moved while calm")
+                val still = it.state == CatBrain.State.IDLE || it.state == CatBrain.State.SLEEP
+                assertTrue(still, "seed $seed was ${it.state} while calm")
+            }
+            // she still lets herself be petted, and gets lively again afterwards
+            b.onPet()
+            assertEquals(CatBrain.State.PET, b.state)
+            b.calm = false
+            var moved = false
+            b.run(30f) { if (abs(it.x - x0) > 1f) moved = true }
+            assertTrue(moved, "seed $seed never moved after calm mode ended")
+        }
+    }
+
+    @Test
+    fun stillClimbsTheKeyboardWhenCalm() {
+        val b = brain()
+        b.calm = true
+        b.resize(w, 1500f, size)
+        b.run(3f)
+        assertEquals(1500f - size, b.y, 0.5f)
+    }
 }

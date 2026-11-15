@@ -94,6 +94,15 @@ class CatHost(
         kick()
     }
 
+    /** Calm mode: she sits still while a demanding app is open, so her window stops moving. */
+    var calm = false
+        set(value) {
+            if (field == value) return
+            field = value
+            brain?.calm = value
+            kick()
+        }
+
     fun toggleBall() {
         setBall(brain?.ball == null)
     }
@@ -115,6 +124,7 @@ class CatHost(
         val screen = screenSize()
         val cat = CatBrain(screen.x.toFloat(), findFloor(screen).toFloat(), size.toFloat())
         cat.chaseEnabled = Prefs.chase(prefs)
+        cat.calm = calm
         // drop in from above the floor
         cat.dragStart()
         cat.dragTo(cat.x, cat.floor - size * 4f)

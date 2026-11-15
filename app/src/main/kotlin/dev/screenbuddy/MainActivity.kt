@@ -1,6 +1,7 @@
 package dev.screenbuddy
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -76,6 +77,39 @@ class MainActivity : Activity() {
                 text = label
                 setOnClickListener { Setup.toggleBall(this@MainActivity) }
             })
+        }
+
+        if (Setup.CAN_SEE_APPS) {
+            add(TextView(this).apply { text = "Stay calm in busy apps"; textSize = 16f }, pad)
+            add(TextView(this).apply {
+                text = "She sits or naps instead of running around, so she doesn't slow those apps down."
+                textSize = 13f
+                alpha = 0.7f
+            }, 0)
+            val modes = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+            val choose = Button(this).apply {
+                text = "Choose apps"
+                setOnClickListener { startActivity(Intent(this@MainActivity, AppPickerActivity::class.java)) }
+            }
+            val options = arrayOf(
+                Prefs.CALM_LISTED to "In apps I choose",
+                Prefs.CALM_ALL to "In every app (she plays only on the home screen)",
+                Prefs.CALM_NEVER to "Never",
+            )
+            for ((mode, label) in options) {
+                modes.addView(RadioButton(this).apply {
+                    id = View.generateViewId()
+                    text = label
+                    isChecked = Prefs.calmMode(prefs) == mode
+                    setOnClickListener {
+                        prefs.edit().putString(Prefs.CALM_MODE, mode).apply()
+                        choose.isEnabled = mode == Prefs.CALM_LISTED
+                    }
+                })
+            }
+            choose.isEnabled = Prefs.calmMode(prefs) == Prefs.CALM_LISTED
+            add(modes, 0)
+            add(choose, 0)
         }
 
         add(TextView(this).apply { text = "Size"; textSize = 16f }, pad)

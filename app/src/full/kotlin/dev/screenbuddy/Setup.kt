@@ -8,6 +8,9 @@ import android.provider.Settings
 /** How this build gets permission to put the cat on screen: an accessibility service. */
 object Setup {
     const val CAN_CHASE = true
+
+    /** The accessibility service can tell which app is open, so calm mode is available. */
+    const val CAN_SEE_APPS = true
     const val BUTTON = "Open accessibility settings"
     const val READY = "The cat is allowed on your screen."
     const val NOT_READY =

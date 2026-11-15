@@ -2,6 +2,9 @@ package dev.screenbuddy
 
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
+import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
@@ -10,12 +13,13 @@ import android.os.Looper
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inputmethod.InputMethodManager
 
 /**
  * Hosts the cat in an accessibility overlay window and feeds it the position of the user's taps.
  * Only event types and on-screen bounds are used; no screen content is read or kept.
  */
-class BuddyService : AccessibilityService() {
+class BuddyService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private var host: CatHost? = null
     private val bounds = Rect()
@@ -25,16 +29,47 @@ class BuddyService : AccessibilityService() {
     private val checkWindows = Runnable {
         val cat = host ?: return@Runnable
         cat.applyWorld()
-        cat.setBall(Prefs.ball(Prefs.of(this)) && isShadeOpen())
+        shadeOpen = isShadeOpen()
+        cat.setBall(Prefs.ball(Prefs.of(this)) && shadeOpen)
+        updateCalm()
     }
 
+    /** The app the user is looking at, as far as we can tell from window changes. */
+    private var foreground: String? = null
+    private var shadeOpen = false
+    private var launcher: String? = null
+    private var keyboards: Set<String> = emptySet()
+
     override fun onServiceConnected() {
+        launcher = packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY,
+        )?.activityInfo?.packageName
+        keyboards = getSystemService(InputMethodManager::class.java).inputMethodList.map { it.packageName }.toSet()
+        Prefs.of(this).registerOnSharedPreferenceChangeListener(this)
         host = CatHost(this, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, ::keyboardTop)
             .also { it.start() }
     }
 
+    override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
+        if (key == Prefs.CALM_MODE || key == Prefs.CALM_APPS) updateCalm()
+    }
+
+    /** Calm her down while a demanding app is open, unless the tray is pulled down over it. */
+    private fun updateCalm() {
+        val cat = host ?: return
+        val app = foreground
+        val prefs = Prefs.of(this)
+        val busyApp = when (Prefs.calmMode(prefs)) {
+            Prefs.CALM_ALL -> app != null && app != launcher && app != packageName
+            Prefs.CALM_LISTED -> app != null && app in Prefs.calmApps(prefs)
+            else -> false
+        }
+        cat.calm = busyApp && !shadeOpen
+    }
+
     override fun onDestroy() {
         handler.removeCallbacks(checkWindows)
+        Prefs.of(this).unregisterOnSharedPreferenceChangeListener(this)
         host?.stop()
         host = null
         super.onDestroy()
@@ -49,6 +84,14 @@ class BuddyService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val cat = host ?: return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            // a new screen or app came up; ignore the system UI and keyboards, which float over apps
+            val pkg = event.packageName?.toString()
+            if (pkg != null && pkg != "com.android.systemui" && pkg !in keyboards && pkg != foreground) {
+                foreground = pkg
+                updateCalm()
+            }
+        }
         if (event.packageName == packageName) return
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED, AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> {

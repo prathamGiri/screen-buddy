@@ -39,6 +39,20 @@ class CatBrain(
     /** When false the cat still notices taps but does not run after them. */
     var chaseEnabled = true
 
+    /**
+     * Calm mode, for when a demanding app is open: she stops wandering, chasing and playing, and
+     * sits or naps so her window stays still. Petting, carrying and the keyboard still work.
+     */
+    var calm = false
+        set(value) {
+            field = value
+            if (value && (state == State.WALK || state == State.CHASE || state == State.PLAY ||
+                    (state == State.ALERT && y <= standY + 1f))
+            ) {
+                enter(State.IDLE)
+            }
+        }
+
     /** The ball of wool, while there is one to play with. */
     var ball: Ball? = null
         private set
@@ -101,7 +115,7 @@ class CatBrain(
             it.kick((rng.nextFloat() - 0.5f) * 3f * size, 0f)
         }
         playLeft = 15f + rng.nextFloat() * 15f
-        if (state != State.DRAG && state != State.AIR && state != State.ALERT) enter(State.ALERT, 0.5f)
+        if (!calm && state != State.DRAG && state != State.AIR && state != State.ALERT) enter(State.ALERT, 0.5f)
     }
 
     fun takeBall() {
@@ -149,6 +163,7 @@ class CatBrain(
         when (state) {
             State.IDLE -> if (stateTime >= stateDur) {
                 when {
+                    calm -> if (rng.nextFloat() < 0.3f) enter(State.SLEEP, 40f + rng.nextFloat() * 80f) else enter(State.IDLE)
                     ball != null && playLeft > 0f -> startPlay()
                     quietTime > 40f && rng.nextFloat() < 0.5f -> enter(State.SLEEP, 40f + rng.nextFloat() * 80f)
                     rng.nextFloat() < 0.65f -> {
@@ -167,6 +182,7 @@ class CatBrain(
                         vy = -sqrt(2f * gravity * h)
                         enterAir()
                     }
+                    calm -> enter(State.IDLE)
                     ball != null && playLeft > 0f -> startPlay()
                     hasTarget && chaseEnabled -> enter(State.CHASE)
                     else -> enter(State.IDLE)
@@ -176,7 +192,7 @@ class CatBrain(
             State.CHASE -> chase(dt)
             State.AIR -> fly(dt)
             State.LAND -> if (stateTime >= 0.25f) {
-                if (ball != null && playLeft > 0f) startPlay() else enter(State.IDLE)
+                if (ball != null && playLeft > 0f && !calm) startPlay() else enter(State.IDLE)
             }
             State.PET -> if (stateTime >= 1.6f) enter(State.IDLE)
             State.SLEEP -> if (stateTime >= stateDur) enter(State.IDLE)
@@ -187,6 +203,7 @@ class CatBrain(
     /** The user tapped something at this screen position. */
     fun onTap(tx: Float, ty: Float) {
         quietTime = 0f
+        if (calm) return
         if (state == State.DRAG || state == State.AIR || state == State.SLEEP || state == State.PET) return
         if (state == State.PLAY || y > standY + 1f) return
         if (state != State.CHASE && rng.nextFloat() > 0.8f) return // sometimes it can't be bothered
@@ -200,7 +217,7 @@ class CatBrain(
     /** The user touched or scrolled somewhere, but we don't know where. */
     fun onNotice() {
         quietTime = 0f
-        if (state == State.IDLE && rng.nextFloat() < 0.25f) {
+        if (!calm && state == State.IDLE && rng.nextFloat() < 0.25f) {
             hasTarget = false
             enter(State.ALERT, 0.5f)
         }
@@ -366,7 +383,7 @@ class CatBrain(
                 vx = 0f
                 vy = 0f
                 // mid-game she lands on her feet and keeps going, without the sit-down squash
-                if (ball != null && playLeft > 0f) startPlay() else enter(State.LAND)
+                if (ball != null && playLeft > 0f && !calm) startPlay() else enter(State.LAND)
             }
         }
     }

@@ -11,6 +11,7 @@ import android.provider.Settings
 /** How this build gets permission to put the cat on screen: "Display over other apps". */
 object Setup {
     const val CAN_CHASE = false
+    const val CAN_SEE_APPS = false
     const val BUTTON = "Allow display over other apps"
     const val READY = "The cat is allowed on your screen."
     const val NOT_READY = "To let the cat live on your screen, allow Screen Buddy Lite to display over other apps."
