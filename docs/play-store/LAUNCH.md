@@ -1,4 +1,4 @@
-# Launching Screen Buddy on Google Play
+# Launching Billu and Friends on Google Play
 
 Everything needed to get from here to a production release, in order. Answers for each Play
 Console form are written out so they can be pasted in. Policies change, so if a form asks
@@ -18,22 +18,16 @@ something not covered here, check the linked Google help page rather than guessi
 
 ## 1. Put the privacy policy online at prathamgiri.com
 
-The app links to **<https://prathamgiri.com/screen-buddy/privacy-policy.html>**, so the policy
+The app links to **<https://prathamgiri.com/billu-and-friends/privacy-policy.html>**, so the policy
 must be served at exactly that address. That link is built into the app; keep it working for as
 long as any version of the app is installed, and don't move it without shipping an update.
 
-**If prathamgiri.com is a GitHub Pages user site** (a repo named `prathamGiri.github.io` with a
-custom domain), this happens on its own: GitHub serves every project site under your domain.
-1. Merge this branch into `main`.
-2. In this repo: **Settings → Pages → Deploy from a branch → `main`, folder `/docs` → Save**.
-3. `docs/` then appears at `https://prathamgiri.com/screen-buddy/`.
+The portfolio is on Vercel: copy `docs/privacy-policy.html` to
+`public/billu-and-friends/privacy-policy.html` in the portfolio project and deploy. Optionally
+copy `docs/index.html` to `public/billu-and-friends/index.html` too, for a small app page. When
+the policy changes here, copy it across again.
 
-**If the portfolio is hosted anywhere else** (Vercel, Netlify, a web host…), copy
-`docs/privacy-policy.html` into your portfolio so it is served at `/screen-buddy/privacy-policy.html`
-(for example `public/screen-buddy/privacy-policy.html` in most site generators). Optionally copy
-`docs/index.html` to `/screen-buddy/index.html` too, for a small app page.
-
-Either way, open the link on your phone and check it loads without a login, before submitting.
+Open the link on your phone and check it loads without a login, before submitting.
 
 ## 2. Create the upload key and give it to CI
 
@@ -57,18 +51,18 @@ Then on GitHub, **Settings → Secrets and variables → Actions → New reposit
 | `UPLOAD_KEY_PASSWORD` | the key password you chose (often the same) |
 
 Keep `upload.jks` and the passwords somewhere safe (a password manager), never in the repo.
-From the next push, each Actions run has a second artifact, **`screen-buddy-play-bundle`**,
+From the next push, each Actions run has a second artifact, **`billu-and-friends-play-bundle`**,
 containing `app-release.aab`. That is the file you upload to Play.
 
 ## 3. Create the app in Play Console
 
-**Home → Create app**: name `Screen Buddy`, default language, **App**, **Free**, accept the
+**Home → Create app**: name `Billu and Friends`, default language, **App**, **Free**, accept the
 declarations.
 
 ## 4. App content (Policy → App content)
 
 **Privacy policy**
-`https://prathamgiri.com/screen-buddy/privacy-policy.html`
+`https://prathamgiri.com/billu-and-friends/privacy-policy.html`
 
 **App access**
 "All functionality is available without any special access." (No login. The app asks for
@@ -103,7 +97,7 @@ Not applicable: answer No or "My app doesn't provide any…" to each.
 **Foreground service permissions** (asked because the app targets Android 14+)
 Type: **Special use**. Paste:
 
-> Screen Buddy shows a small animated pet that stays on top of other apps until the user hides
+> Billu and Friends shows a small animated pet that stays on top of other apps until the user hides
 > it. The foreground service keeps the pet's overlay window and its animation running while the
 > user uses other apps; without it, Android stops the pet within minutes and it disappears. The
 > service starts only when the user opens the app and chooses to show the pet. It shows an
@@ -113,7 +107,7 @@ Type: **Special use**. Paste:
 Impact if the task were deferred or interrupted: "The pet disappears from the screen, which is
 the whole purpose of the app."
 
-Video: record 20–30 seconds on the phone (screen recorder): open Screen Buddy, switch
+Video: record 20–30 seconds on the phone (screen recorder): open Billu and Friends, switch
 "On your screen" on, go to the home screen and another app with the cat visible, pull down the
 notification, then switch the cat off. Upload to YouTube as **Unlisted** and paste the link.
 
@@ -124,7 +118,7 @@ and its ball, and never cover or read other apps' content."
 
 ## 5. Store listing (Grow → Store presence → Main store listing)
 
-**App name** (max 30): `Screen Buddy`
+**App name** (max 30): `Billu and Friends`
 
 **Short description** (max 80):
 `A pixel cat who lives on your screen. She naps, grooms and chases wool.`
@@ -132,7 +126,7 @@ and its ball, and never cover or read other apps' content."
 **Full description:**
 
 ```
-Meet Billu Rani, a little pixel cat who lives on top of your screen.
+Meet Billu, a little pixel cat who lives on top of your screen.
 
 She strolls along the bottom of your phone while you use it, sits and watches, and now and then
 licks her paw or scratches behind her ear. Leave her alone for a while and she yawns, curls up
@@ -150,10 +144,10 @@ Make her yours
 • Hide her with one switch whenever you want a clear screen
 
 Private by design
-Screen Buddy has no internet access, no ads, no accounts and no tracking. It never reads what
+Billu and Friends has no internet access, no ads, no accounts and no tracking. It never reads what
 is on your screen or what you type.
 
-Screen Buddy needs permission to display over other apps, so she can live on top of them. It
+Billu and Friends needs permission to display over other apps, so she can live on top of them. It
 shows a quiet notification while she is on your screen, as Android requires.
 
 Dogs and bunnies are on their way.
@@ -172,7 +166,7 @@ the cat on the keyboard; the cat asleep; the cat with the ball. Avoid showing ot
 personal content or notifications in them.
 
 **Category:** Entertainment (or Personalization). **Contact email:** required and shown
-publicly. **Website:** `https://prathamgiri.com/screen-buddy/` (or just `https://prathamgiri.com`).
+publicly. **Website:** `https://prathamgiri.com/billu-and-friends/` (or just `https://prathamgiri.com`).
 A contact address on your own domain (for example `hello@prathamgiri.com`) looks more
 trustworthy than a personal Gmail, if your domain provider offers email forwarding.
 
@@ -184,7 +178,7 @@ production.
 1. **Test and release → Testing → Closed testing → Create track** (or use "Alpha").
 2. Testers: add an email list or a Google Group with 12+ people (aim for 15–20, since some
    drop out).
-3. Upload `app-release.aab` from the `screen-buddy-play-bundle` artifact, add release notes,
+3. Upload `app-release.aab` from the `billu-and-friends-play-bundle` artifact, add release notes,
    roll out.
 4. Send testers the opt-in link. Each must accept it with the same Google account they use on
    the phone and install from Play.
@@ -205,7 +199,7 @@ production.
 
 1. Raise `versionName` in `app/build.gradle.kts` (for example `1.1`). The version code goes up
    by itself.
-2. Push, wait for the Actions run, download `screen-buddy-play-bundle`.
+2. Push, wait for the Actions run, download `billu-and-friends-play-bundle`.
 3. Upload to the track, add release notes, roll out.
 
 ## Things to keep in mind
@@ -213,7 +207,7 @@ production.
 - **Phone makers' battery savers** (Xiaomi, Samsung, Oppo, Vivo, Huawei and others) can stop
   background apps. If testers say the cat vanishes, that is the usual cause; an in-app tip to
   allow the app to run in the background would help.
-- **Name clashes:** search Play for "Screen Buddy" before launch. If a well-known app already
+- **Name clashes:** search Play for "Billu and Friends" before launch. If a well-known app already
   uses the name, a small change avoids confusion and trademark complaints.
 - **The debug key in the repository** (`app/debug.keystore`) is for test APKs only. Never use it
   for Play; the release bundle is signed with your upload key.

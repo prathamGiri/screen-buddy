@@ -6,7 +6,7 @@ package dev.screenbuddy.core
  * and, where it behaves differently, its own brain.
  */
 enum class Species(val id: String, val label: String, val defaultName: String, val available: Boolean) {
-    CAT("cat", "Cat", "Billu Rani", true),
+    CAT("cat", "Cat", "Billu", true),
     DOG("dog", "Dog", "Biscuit", false),
     BUNNY("bunny", "Bunny", "Clover", false);
 

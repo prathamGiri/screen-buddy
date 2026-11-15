@@ -134,7 +134,7 @@ class CatHost(
         } else {
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        lp.title = "Screen Buddy"
+        lp.title = "Billu and Friends"
         return lp
     }
 

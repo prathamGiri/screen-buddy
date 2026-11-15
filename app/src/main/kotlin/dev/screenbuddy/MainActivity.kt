@@ -52,7 +52,7 @@ class MainActivity : Activity() {
         )
 
         // --- heading ---
-        add(Lux.eyebrow(this, "Screen Buddy"), 8f)
+        add(Lux.eyebrow(this, getString(R.string.app_name)), 8f)
         add(heading(), 6f)
         add(Lux.text(this, "Your ginger tabby, at home on your screen", 15f, Lux.MUTED, Lux.LIGHT), 2f)
 
@@ -67,7 +67,7 @@ class MainActivity : Activity() {
             }
             addView(inviteButton, LinearLayout.LayoutParams(match, wrap))
             addView(Lux.text(this@MainActivity,
-                "Allow Screen Buddy to display over other apps, then come back here.",
+                "Allow Billu and Friends to display over other apps, then come back here.",
                 13f, Lux.MUTED, Lux.LIGHT,
             ).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(10f) })
         }
@@ -100,7 +100,7 @@ class MainActivity : Activity() {
         add(gestures(), 14f)
 
         add(Lux.text(this,
-            "Screen Buddy has no internet access and never reads what is on your screen.",
+            "Billu and Friends has no internet access and never reads what is on your screen.",
             12f, Lux.FAINT, Lux.LIGHT,
         ).apply { gravity = Gravity.CENTER }, 36f)
         add(Lux.text(this, "Privacy policy", 13f, Lux.GOLD, Lux.MEDIUM).apply {
@@ -425,6 +425,6 @@ class MainActivity : Activity() {
     }
 
     private companion object {
-        const val PRIVACY_POLICY_URL = "https://prathamgiri.com/screen-buddy/privacy-policy.html"
+        const val PRIVACY_POLICY_URL = "https://prathamgiri.com/billu-and-friends/privacy-policy.html"
     }
 }

@@ -44,7 +44,7 @@ class KeyboardWatcher(context: Context, private val onChange: () -> Unit) {
         if (Build.VERSION.SDK_INT >= 30) {
             lp.fitInsetsTypes = lp.fitInsetsTypes or WindowInsets.Type.ime()
         }
-        lp.title = "Screen Buddy keyboard watcher"
+        lp.title = "Billu and Friends keyboard watcher"
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> measure() }
         view.setOnApplyWindowInsetsListener { _, insets ->
             view.post { measure() }

@@ -1,6 +1,6 @@
-# Screen Buddy
+# Billu and Friends
 
-A pixel companion that lives on top of your Android screen. Today that is Billu Rani, a ginger
+A pixel companion that lives on top of your Android screen. Today that is Billu, a ginger
 tabby; dogs and bunnies are planned.
 
 She wanders along the bottom edge, now and then grooms herself or scratches behind her ear,
@@ -14,10 +14,10 @@ Every behaviour can be switched off in the app, and you can give her any name yo
 ## Install
 
 Open `app-debug.apk` on the phone (it is built by every run under the repository's **Actions**
-tab, as `screen-buddy-apk`), open Screen Buddy, tap **Invite Billu Rani onto your screen**, and
+tab, as `billu-and-friends-apk`), open Billu and Friends, tap **Invite Billu onto your screen**, and
 allow it to display over other apps.
 
-Screen Buddy uses only the "Display over other apps" permission and a quiet notification that
+Billu and Friends uses only the "Display over other apps" permission and a quiet notification that
 keeps it running. It has no internet permission and never reads what is on your screen; it
 only learns that the screen was touched, not where.
 
@@ -25,7 +25,7 @@ only learns that the screen was touched, not where.
 
 `docs/play-store/LAUNCH.md` walks through the launch: privacy policy hosting, the upload key,
 every Play Console form with answers, the store listing and the closed test. The privacy policy
-is `docs/privacy-policy.html`, served at https://prathamgiri.com/screen-buddy/privacy-policy.html.
+is `docs/privacy-policy.html`, served at https://prathamgiri.com/billu-and-friends/privacy-policy.html.
 
 ## Build
 
