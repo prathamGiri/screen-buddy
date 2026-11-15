@@ -425,6 +425,6 @@ class MainActivity : Activity() {
     }
 
     private companion object {
-        const val PRIVACY_POLICY_URL = "https://prathamgiri.github.io/screen-buddy/privacy-policy.html"
+        const val PRIVACY_POLICY_URL = "https://prathamgiri.com/screen-buddy/privacy-policy.html"
     }
 }

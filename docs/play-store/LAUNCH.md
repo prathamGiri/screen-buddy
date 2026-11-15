@@ -16,18 +16,24 @@ something not covered here, check the linked Google help page rather than guessi
 | Foreground service declares its type (`specialUse`) with a reason in the manifest | Done |
 | Service does not crash if Android refuses to restart it in the background | Done |
 
-## 1. Put the privacy policy online (GitHub Pages)
+## 1. Put the privacy policy online at prathamgiri.com
 
+The app links to **<https://prathamgiri.com/screen-buddy/privacy-policy.html>**, so the policy
+must be served at exactly that address. That link is built into the app; keep it working for as
+long as any version of the app is installed, and don't move it without shipping an update.
+
+**If prathamgiri.com is a GitHub Pages user site** (a repo named `prathamGiri.github.io` with a
+custom domain), this happens on its own: GitHub serves every project site under your domain.
 1. Merge this branch into `main`.
-2. On GitHub: **Settings → Pages → Build and deployment → Deploy from a branch → `main`,
-   folder `/docs` → Save**.
-3. After a minute, check that these open:
-   - <https://prathamgiri.github.io/screen-buddy/privacy-policy.html> (the app links here)
-   - <https://prathamgiri.github.io/screen-buddy/> (use as the listing's website)
+2. In this repo: **Settings → Pages → Deploy from a branch → `main`, folder `/docs` → Save**.
+3. `docs/` then appears at `https://prathamgiri.com/screen-buddy/`.
 
-The policy points people to the developer email on the Play listing and to GitHub issues. If
-your developer name differs from what you want shown, nothing in the policy needs changing; it
-refers to "the developer named on its Google Play listing".
+**If the portfolio is hosted anywhere else** (Vercel, Netlify, a web host…), copy
+`docs/privacy-policy.html` into your portfolio so it is served at `/screen-buddy/privacy-policy.html`
+(for example `public/screen-buddy/privacy-policy.html` in most site generators). Optionally copy
+`docs/index.html` to `/screen-buddy/index.html` too, for a small app page.
+
+Either way, open the link on your phone and check it loads without a login, before submitting.
 
 ## 2. Create the upload key and give it to CI
 
@@ -62,7 +68,7 @@ declarations.
 ## 4. App content (Policy → App content)
 
 **Privacy policy**
-`https://prathamgiri.github.io/screen-buddy/privacy-policy.html`
+`https://prathamgiri.com/screen-buddy/privacy-policy.html`
 
 **App access**
 "All functionality is available without any special access." (No login. The app asks for
@@ -166,7 +172,9 @@ the cat on the keyboard; the cat asleep; the cat with the ball. Avoid showing ot
 personal content or notifications in them.
 
 **Category:** Entertainment (or Personalization). **Contact email:** required and shown
-publicly. **Website:** `https://prathamgiri.github.io/screen-buddy/`.
+publicly. **Website:** `https://prathamgiri.com/screen-buddy/` (or just `https://prathamgiri.com`).
+A contact address on your own domain (for example `hello@prathamgiri.com`) looks more
+trustworthy than a personal Gmail, if your domain provider offers email forwarding.
 
 ## 6. Closed test (personal accounts created after 13 Nov 2023)
 

@@ -25,7 +25,7 @@ only learns that the screen was touched, not where.
 
 `docs/play-store/LAUNCH.md` walks through the launch: privacy policy hosting, the upload key,
 every Play Console form with answers, the store listing and the closed test. The privacy policy
-is `docs/privacy-policy.html`, served by GitHub Pages from `docs/`.
+is `docs/privacy-policy.html`, served at https://prathamgiri.com/screen-buddy/privacy-policy.html.
 
 ## Build
 
