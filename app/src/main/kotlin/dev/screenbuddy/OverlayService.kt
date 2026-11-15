@@ -27,22 +27,11 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         val channel = NotificationChannel(CHANNEL, "Companion on screen", NotificationManager.IMPORTANCE_MIN)
         channel.setShowBadge(false)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
-        )
-        val name = Prefs.species(Prefs.of(this)).petName
-        val notification = Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_paw)
-            .setColor(getColor(R.color.gold))
-            .setContentTitle("$name is keeping you company")
-            .setContentText("Tap to change what she gets up to.")
-            .setContentIntent(open)
-            .setOngoing(true)
-            .build()
+        val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
-            startForeground(1, notification)
+            startForeground(NOTIFICATION_ID, notification)
         }
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
@@ -73,10 +62,30 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
-        if (!Prefs.show(p)) stopSelf()
+        if (!Prefs.show(p)) {
+            stopSelf()
+        } else if (key == Prefs.nameKey(Prefs.species(p))) {
+            // she was renamed: say so in the notification too
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        val open = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+        )
+        return Notification.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_paw)
+            .setColor(getColor(R.color.gold))
+            .setContentTitle("${Prefs.name(Prefs.of(this))} is keeping you company")
+            .setContentText("Tap to change what she gets up to.")
+            .setContentIntent(open)
+            .setOngoing(true)
+            .build()
     }
 
     companion object {
         private const val CHANNEL = "companion"
+        private const val NOTIFICATION_ID = 1
     }
 }

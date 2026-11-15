@@ -34,6 +34,8 @@ class MainActivity : Activity() {
     private lateinit var invite: View
     private lateinit var showRow: View
     private lateinit var showSwitch: LuxSwitch
+    private lateinit var title: TextView
+    private lateinit var inviteButton: TextView
 
     private val match = ViewGroup.LayoutParams.MATCH_PARENT
     private val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -51,7 +53,7 @@ class MainActivity : Activity() {
 
         // --- heading ---
         add(Lux.eyebrow(this, "Screen Buddy"), 8f)
-        add(Lux.text(this, species.petName, 38f, face = Lux.SERIF), 6f)
+        add(heading(), 6f)
         add(Lux.text(this, "Your ginger tabby, at home on your screen", 15f, Lux.MUTED, Lux.LIGHT), 2f)
 
         // --- the stage ---
@@ -60,9 +62,10 @@ class MainActivity : Activity() {
         // --- permission, or the switch to show her ---
         invite = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(Lux.goldButton(this@MainActivity, "Invite ${species.petName} onto your screen") {
+            inviteButton = Lux.goldButton(this@MainActivity, "") {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-            }, LinearLayout.LayoutParams(match, wrap))
+            }
+            addView(inviteButton, LinearLayout.LayoutParams(match, wrap))
             addView(Lux.text(this@MainActivity,
                 "Allow Screen Buddy to display over other apps, then come back here.",
                 13f, Lux.MUTED, Lux.LIGHT,
@@ -130,6 +133,15 @@ class MainActivity : Activity() {
     /** Bring the screen in line with the permission and settings, and start the overlay if wanted. */
     private fun refresh() {
         val ready = ready()
+        val name = Prefs.name(prefs)
+        title.text = name
+        // long names step down in size so they still fit on one or two lines
+        title.textSize = when {
+            name.length <= 11 -> 38f
+            name.length <= 15 -> 32f
+            else -> 28f
+        }
+        inviteButton.text = "Invite $name onto your screen"
         invite.visibility = if (ready) View.GONE else View.VISIBLE
         showRow.visibility = if (ready) View.VISIBLE else View.GONE
         showSwitch.set(Prefs.show(prefs), animate = false, notify = false)
@@ -145,6 +157,75 @@ class MainActivity : Activity() {
     }
 
     // --- sections ---
+
+    /** Her name in large type, with a quiet button to rename her. */
+    private fun heading(): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        title = Lux.text(this, "", 38f, face = Lux.SERIF).apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setLineSpacing(0f, 1f)
+            isClickable = true
+            setOnClickListener { rename() }
+        }
+        row.addView(title, LinearLayout.LayoutParams(0, wrap, 1f))
+        val button = Lux.text(this, "Rename", 12f, Lux.GOLD, Lux.MEDIUM).apply {
+            letterSpacing = 0.08f
+            gravity = Gravity.CENTER
+            setPadding(dp(14f), dp(8f), dp(14f), dp(8f))
+            background = Lux.pressable(this@MainActivity, Lux.card(this@MainActivity, stroke = Lux.GOLD_DEEP, radius = 18f), 18f)
+            isClickable = true
+            setOnClickListener { rename() }
+        }
+        row.addView(button, LinearLayout.LayoutParams(wrap, wrap).apply { leftMargin = dp(12f) })
+        return row
+    }
+
+    private fun rename() {
+        val species = Prefs.species(prefs)
+        val field = android.widget.EditText(this).apply {
+            setText(Prefs.name(prefs))
+            setSelection(text.length)
+            setSingleLine()
+            filters = arrayOf(android.text.InputFilter.LengthFilter(Prefs.NAME_MAX))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            textSize = 20f
+            typeface = Lux.SERIF
+            setTextColor(Lux.IVORY)
+            setHintTextColor(Lux.FAINT)
+            hint = species.defaultName
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Lux.GOLD)
+        }
+        val box = FrameLayout(this).apply {
+            setPadding(dp(24f), dp(8f), dp(24f), 0)
+            addView(field)
+        }
+        val dialog = android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("What would you like to call her?")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                Prefs.setName(prefs, species, field.text.toString())
+                refresh()
+            }
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Use ${species.defaultName}") { _, _ ->
+                Prefs.setName(prefs, species, "")
+                refresh()
+            }
+            .create()
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawable(Lux.card(this, fill = Lux.SURFACE_HI, radius = 24f))
+            for (which in intArrayOf(android.app.AlertDialog.BUTTON_POSITIVE, android.app.AlertDialog.BUTTON_NEGATIVE, android.app.AlertDialog.BUTTON_NEUTRAL)) {
+                dialog.getButton(which)?.setTextColor(if (which == android.app.AlertDialog.BUTTON_POSITIVE) Lux.GOLD else Lux.MUTED)
+            }
+            field.requestFocus()
+        }
+        dialog.show()
+    }
 
     private fun stage(): View {
         val frame = FrameLayout(this)
@@ -224,7 +305,7 @@ class MainActivity : Activity() {
             tile.addView(portrait, LinearLayout.LayoutParams(dp(56f), dp(56f)))
             tile.addView(Lux.text(this, s.label, 15f, Lux.IVORY, Lux.SERIF).apply { gravity = Gravity.CENTER },
                 LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(10f) })
-            tile.addView(Lux.text(this, if (s.available) (if (selected) "Selected" else s.petName) else "Coming soon",
+            tile.addView(Lux.text(this, if (s.available) (if (selected) "Selected" else s.defaultName) else "Coming soon",
                 11f, if (selected) Lux.GOLD else Lux.FAINT, Lux.MEDIUM).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = 0.08f

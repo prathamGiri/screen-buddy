@@ -1,6 +1,6 @@
 # Screen Buddy
 
-A pixel companion that lives on top of your Android screen. Today that is Marmalade, a ginger
+A pixel companion that lives on top of your Android screen. Today that is Billu Rani, a ginger
 tabby; dogs and bunnies are planned.
 
 She wanders along the bottom edge, now and then grooms herself or scratches behind her ear,
@@ -9,12 +9,12 @@ with a stretch. Tap her to pet her,
 drag her to carry her, and let go mid-swipe to toss her. Every hour or two of screen time a
 ball of wool rolls in; she plays with it for a minute or two, then bats it off the screen.
 
-Every behaviour can be switched off in the app.
+Every behaviour can be switched off in the app, and you can give her any name you like.
 
 ## Install
 
 Open `app-debug.apk` on the phone (it is built by every run under the repository's **Actions**
-tab, as `screen-buddy-apk`), open Screen Buddy, tap **Invite Marmalade onto your screen**, and
+tab, as `screen-buddy-apk`), open Screen Buddy, tap **Invite Billu Rani onto your screen**, and
 allow it to display over other apps.
 
 Screen Buddy uses only the "Display over other apps" permission and a quiet notification that
