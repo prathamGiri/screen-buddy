@@ -4,6 +4,9 @@ import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
@@ -16,6 +19,14 @@ class BuddyService : AccessibilityService() {
 
     private var host: CatHost? = null
     private val bounds = Rect()
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Window changes arrive in bursts (a tray pull sends many); look at the screen once per burst. */
+    private val checkWindows = Runnable {
+        val cat = host ?: return@Runnable
+        cat.applyWorld()
+        cat.setBall(Prefs.ball(Prefs.of(this)) && isShadeOpen())
+    }
 
     override fun onServiceConnected() {
         host = CatHost(this, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, ::keyboardTop)
@@ -23,6 +34,7 @@ class BuddyService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(checkWindows)
         host?.stop()
         host = null
         super.onDestroy()
@@ -48,13 +60,14 @@ class BuddyService : AccessibilityService() {
                     // a "click" on something that fills the screen says nothing about where the finger was
                     val vague = bounds.isEmpty || bounds.height() > cat.floor * 0.5f
                     if (vague) cat.onNotice() else cat.onTap(bounds.exactCenterX(), bounds.exactCenterY())
+                    @Suppress("DEPRECATION")
+                    if (Build.VERSION.SDK_INT < 33) source.recycle()
                 }
             }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                cat.applyWorld()
-                cat.setBall(Prefs.ball(Prefs.of(this)) && isShadeOpen())
+                handler.removeCallbacks(checkWindows)
+                handler.postDelayed(checkWindows, 80L)
             }
-            else -> cat.onNotice()
         }
     }
 

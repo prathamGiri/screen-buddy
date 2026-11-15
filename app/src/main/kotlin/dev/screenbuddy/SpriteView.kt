@@ -26,7 +26,6 @@ class SpriteView(context: Context, private val listener: Listener) : View(contex
 
     private val paint = Paint().apply { isFilterBitmap = false; isAntiAlias = false }
     private val dst = Rect()
-    private val bitmaps = HashMap<Int, Bitmap>()
     private var bitmap: Bitmap? = null
     private var flip = false
 
@@ -42,11 +41,8 @@ class SpriteView(context: Context, private val listener: Listener) : View(contex
     var windowX = 0
     var windowY = 0
 
-    /** Show a square sprite of [side] pixels; [key] identifies the frame so its bitmap is reused. */
-    fun show(key: Int, side: Int, facingRight: Boolean, pixels: () -> IntArray) {
-        val next = bitmaps.getOrPut(key) {
-            Bitmap.createBitmap(pixels(), side, side, Bitmap.Config.ARGB_8888)
-        }
+    /** Show [next], mirrored when facing left. Only redraws when the picture actually changes. */
+    fun show(next: Bitmap, facingRight: Boolean) {
         if (next !== bitmap || flip == facingRight) {
             bitmap = next
             flip = !facingRight

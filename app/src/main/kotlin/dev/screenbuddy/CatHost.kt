@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.os.Build
@@ -14,6 +15,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.WindowInsets
 import android.view.WindowManager
+import dev.screenbuddy.core.Anim
 import dev.screenbuddy.core.CatBrain
 import dev.screenbuddy.core.Sprites
 import kotlin.math.roundToInt
@@ -38,6 +40,10 @@ class CatHost(
     private var ballView: SpriteView? = null
     private var ballParams: WindowManager.LayoutParams? = null
     private var brain: CatBrain? = null
+
+    // Every sprite frame as a ready-made bitmap, so drawing a frame allocates nothing.
+    private val catBitmaps = arrayOfNulls<Bitmap>(Anim.entries.size * FRAME_SLOTS)
+    private val ballBitmaps = arrayOfNulls<Bitmap>(Sprites.BALL_FRAMES)
 
     private var screenOn = true
     private var ticking = false
@@ -227,22 +233,41 @@ class CatHost(
         render()
         ticking = true
         lastFrameNanos = frameTimeNanos
-        if (cat.isBusy) {
-            Choreographer.getInstance().postFrameCallback(this)
-        } else {
-            Choreographer.getInstance().postFrameCallbackDelayed(this, 120L)
-        }
+        // While moving, tick at most ~60 times a second (120 Hz screens would otherwise double the
+        // work). While sitting or asleep, wake only about twice per animation frame.
+        val delay = if (cat.isBusy) BUSY_DELAY_MS else (500f / cat.anim.fps).toLong().coerceIn(100L, 400L)
+        Choreographer.getInstance().postFrameCallbackDelayed(this, delay)
     }
+
+    private fun catBitmap(anim: Anim, frame: Int): Bitmap {
+        val i = anim.ordinal * FRAME_SLOTS + frame
+        return catBitmaps[i] ?: Bitmap.createBitmap(
+            Sprites.frame(anim, frame), Sprites.SIZE, Sprites.SIZE, Bitmap.Config.ARGB_8888,
+        ).also { catBitmaps[i] = it }
+    }
+
+    private fun ballBitmap(frame: Int): Bitmap =
+        ballBitmaps[frame] ?: Bitmap.createBitmap(
+            Sprites.ball(frame), Sprites.BALL_SIZE, Sprites.BALL_SIZE, Bitmap.Config.ARGB_8888,
+        ).also { ballBitmaps[frame] = it }
+
+    /**
+     * Snap a position to the sprite's own pixel grid, measured from [anchor] (the floor, so she
+     * stays exactly on it). Moving a window is the expensive part of every frame, and this means
+     * she only moves when she has travelled a whole art pixel, which also suits the pixel style.
+     */
+    private fun snap(v: Float, anchor: Float, unit: Float): Int =
+        (anchor - ((anchor - v) / unit).roundToInt() * unit).roundToInt()
 
     private fun render() {
         val cat = brain ?: return
         val v = view ?: return
         val lp = params ?: return
-        val anim = cat.anim
-        val frame = cat.frame
-        v.show(anim.ordinal * 64 + frame, Sprites.SIZE, cat.facingRight) { Sprites.frame(anim, frame) }
-        val nx = cat.x.roundToInt()
-        val ny = cat.y.roundToInt()
+        v.show(catBitmap(cat.anim, cat.frame), cat.facingRight)
+        val unit = cat.size / Sprites.SIZE
+        val free = cat.state == CatBrain.State.DRAG // follow the finger exactly while carried
+        val nx = if (free) cat.x.roundToInt() else snap(cat.x, 0f, unit)
+        val ny = if (free) cat.y.roundToInt() else snap(cat.y, cat.floor - cat.size, unit)
         v.windowX = nx
         v.windowY = ny
         if (nx != lp.x || ny != lp.y) {
@@ -264,8 +289,9 @@ class CatHost(
             }
             return
         }
-        val bx = ball.x.roundToInt()
-        val by = ball.y.roundToInt()
+        val unit = cat.size / Sprites.SIZE
+        val bx = if (ball.held) ball.x.roundToInt() else snap(ball.x, 0f, unit)
+        val by = if (ball.held) ball.y.roundToInt() else snap(ball.y, cat.floor - ball.d, unit)
         var lp = ballParams
         if (bv == null || lp == null) {
             bv = SpriteView(context, ballListener)
@@ -276,8 +302,7 @@ class CatHost(
             ballView = bv
             ballParams = lp
         }
-        val frame = ball.frame
-        bv.show(frame, Sprites.BALL_SIZE, true) { Sprites.ball(frame) }
+        bv.show(ballBitmap(ball.frame), true)
         bv.windowX = bx
         bv.windowY = by
         if (bx != lp.x || by != lp.y) {
@@ -334,4 +359,12 @@ class CatHost(
     }
 
     override fun onOutsideTouch() = onNotice()
+
+    private companion object {
+        /** Room for up to this many frames per animation in [catBitmaps]. */
+        const val FRAME_SLOTS = 16
+
+        /** Ask for the next frame no sooner than this while moving; ~60 per second. */
+        const val BUSY_DELAY_MS = 12L
+    }
 }
