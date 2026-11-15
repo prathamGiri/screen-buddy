@@ -21,10 +21,17 @@ Screen Buddy uses only the "Display over other apps" permission and a quiet noti
 keeps it running. It has no internet permission and never reads what is on your screen; it
 only learns that the screen was touched, not where.
 
+## Google Play
+
+`docs/play-store/LAUNCH.md` walks through the launch: privacy policy hosting, the upload key,
+every Play Console form with answers, the store listing and the closed test. The privacy policy
+is `docs/privacy-policy.html`, served by GitHub Pages from `docs/`.
+
 ## Build
 
 ```
-./gradlew :app:assembleDebug     # needs the Android SDK
+./gradlew :app:assembleDebug     # test APK; needs the Android SDK
+./gradlew :app:bundleRelease     # Play bundle; signed when the UPLOAD_* variables are set
 ./gradlew -PnoAndroid :core:test # behaviour and sprite tests, no SDK needed
 ```
 

@@ -5,16 +5,21 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// The Play upload key never lives in the repository. CI writes it to a file from the
+// repository's secrets and passes its location and passwords in these environment variables.
+val uploadKey: String? = System.getenv("UPLOAD_KEYSTORE_FILE")?.takeIf { file(it).exists() }
+
 android {
     namespace = "dev.screenbuddy"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.screenbuddy"
         minSdk = 29
-        targetSdk = 35
-        versionCode = 2
-        versionName = "0.2"
+        targetSdk = 36
+        // Play needs a higher versionCode for every upload; CI passes its run number.
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 3
+        versionName = "1.0"
     }
 
     // Every build signs debug APKs with this one checked-in key. Without it each CI run makes a
@@ -26,6 +31,24 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        if (uploadKey != null) {
+            create("upload") {
+                storeFile = file(uploadKey)
+                storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+                keyPassword = System.getenv("UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // unsigned without the upload key; Play rejects unsigned bundles, so CI only uploads signed ones
+            signingConfig = uploadKey?.let { signingConfigs.getByName("upload") }
         }
     }
 

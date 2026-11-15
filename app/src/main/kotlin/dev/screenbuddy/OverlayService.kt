@@ -12,6 +12,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 
 /** Keeps the cat's overlay window alive using the "Display over other apps" permission. */
@@ -28,10 +29,19 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         channel.setShowBadge(false)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: RuntimeException) {
+            // Android can refuse when the system restarts the service while the app is in the
+            // background (ForegroundServiceStartNotAllowedException, or a SecurityException).
+            // Rather than crash, wait until the app is opened again, which starts it properly.
+            Log.w("ScreenBuddy", "Could not start in the foreground", e)
+            stopSelf()
+            return
         }
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
@@ -48,6 +58,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        // safe even if onCreate stopped early and never registered
         Prefs.of(this).unregisterOnSharedPreferenceChangeListener(this)
         keyboard?.stop()
         keyboard = null

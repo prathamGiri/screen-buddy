@@ -7,6 +7,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Set these four repository secrets to also build a signed bundle for Google Play
+      # (see docs/play-store/LAUNCH.md). Without them only the test APK is built.
+      UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+      UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+      UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+      UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -15,8 +22,20 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - name: Test and build
-        run: ./gradlew --no-daemon :core:test :app:assembleDebug
+        run: ./gradlew --no-daemon :core:test :app:assembleDebug -PversionCode=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: screen-buddy-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Build signed bundle for Google Play
+        if: env.UPLOAD_KEYSTORE_BASE64 != ''
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          export UPLOAD_KEYSTORE_FILE="$RUNNER_TEMP/upload.jks"
+          ./gradlew --no-daemon :app:bundleRelease -PversionCode=${{ github.run_number }}
+          rm "$UPLOAD_KEYSTORE_FILE"
+      - uses: actions/upload-artifact@v4
+        if: env.UPLOAD_KEYSTORE_BASE64 != ''
+        with:
+          name: screen-buddy-play-bundle
+          path: app/build/outputs/bundle/release/app-release.aab

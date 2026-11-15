@@ -103,8 +103,15 @@ class MainActivity : Activity() {
             "Screen Buddy has no internet access and never reads what is on your screen.",
             12f, Lux.FAINT, Lux.LIGHT,
         ).apply { gravity = Gravity.CENTER }, 36f)
+        add(Lux.text(this, "Privacy policy", 13f, Lux.GOLD, Lux.MEDIUM).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = 0.04f
+            setPadding(0, dp(10f), 0, dp(10f))
+            isClickable = true
+            setOnClickListener { openPrivacyPolicy() }
+        }, 8f)
         add(Lux.text(this, "Version ${packageManager.getPackageInfo(packageName, 0).versionName}", 12f, Lux.FAINT, Lux.LIGHT)
-            .apply { gravity = Gravity.CENTER }, 4f)
+            .apply { gravity = Gravity.CENTER }, 0f)
 
         val scroll = ScrollView(this).apply {
             setBackgroundColor(Lux.INK)
@@ -154,6 +161,15 @@ class MainActivity : Activity() {
         status.setCompoundDrawablesRelativeWithIntrinsicBounds(dot(if (on) Lux.GOLD else Lux.FAINT), null, null, null)
         preview.enabled = Prefs.behaviors(prefs)
         if (on) startForegroundService(Intent(this, OverlayService::class.java))
+    }
+
+    /** Opens the policy in the browser; the app itself has no internet permission. */
+    private fun openPrivacyPolicy() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
+        } catch (e: android.content.ActivityNotFoundException) {
+            Toast.makeText(this, PRIVACY_POLICY_URL, Toast.LENGTH_LONG).show()
+        }
     }
 
     // --- sections ---
@@ -406,5 +422,9 @@ class MainActivity : Activity() {
             row.addView(cell, LinearLayout.LayoutParams(0, wrap, 1f))
         }
         return row
+    }
+
+    private companion object {
+        const val PRIVACY_POLICY_URL = "https://prathamgiri.github.io/screen-buddy/privacy-policy.html"
     }
 }
