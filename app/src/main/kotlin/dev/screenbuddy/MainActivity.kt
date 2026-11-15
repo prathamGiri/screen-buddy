@@ -89,7 +89,7 @@ class MainActivity : Activity() {
 
         // --- behaviours ---
         add(Lux.eyebrow(this, "Behaviours"), 36f)
-        add(Lux.text(this, "She moves between these by herself, one after another.", 13f, Lux.MUTED, Lux.LIGHT), 6f)
+        add(Lux.text(this, "She does these by herself, at a cat's own unhurried pace.", 13f, Lux.MUTED, Lux.LIGHT), 6f)
         add(behaviours(), 14f)
 
         // --- gestures ---
@@ -270,12 +270,12 @@ class MainActivity : Activity() {
     private fun behaviours(): View {
         val items = listOf(
             Triple(Behavior.BALL, "Ball of wool", "Every hour or two a ball rolls in. She plays for a minute or two, then bats it away."),
-            Triple(Behavior.GROOM, "Grooming", "Licks her paw and washes her face."),
-            Triple(Behavior.STRETCH, "Stretching", "A long, slow stretch from nose to tail."),
-            Triple(Behavior.YAWN, "Yawning", "A big, unhurried yawn."),
-            Triple(Behavior.SCRATCH, "Ear scratching", "A quick scratch behind the ear."),
+            Triple(Behavior.GROOM, "Grooming", "Now and then she licks her paw and washes her face."),
+            Triple(Behavior.STRETCH, "Stretching", "A long stretch when she wakes from a nap by herself."),
+            Triple(Behavior.YAWN, "Yawning", "A big yawn as she settles down for a nap."),
+            Triple(Behavior.SCRATCH, "Ear scratching", "An occasional scratch behind the ear."),
             Triple(Behavior.WANDER, "Wandering", "Strolls along the bottom of the screen."),
-            Triple(Behavior.NAP, "Napping", "Curls up for a nap when left alone."),
+            Triple(Behavior.NAP, "Napping", "Curls up for a long nap when left alone."),
             Triple(Behavior.KEYBOARD, "Keyboard visits", "Hops up onto the keyboard while you type."),
             Triple(Behavior.NOTICE, "Curiosity", "Perks up now and then when you touch the screen."),
         )

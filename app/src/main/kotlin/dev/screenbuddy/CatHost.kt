@@ -106,9 +106,7 @@ class CatHost(
         cat.chaseEnabled = false
         cat.enabled = Prefs.behaviors(prefs)
         // drop in from above the floor
-        cat.dragStart()
-        cat.dragTo(cat.x, cat.floor - size * 4f)
-        cat.dragEnd(0f, 0f)
+        cat.dropIn(size * 3f)
         val v = SpriteView(context, this)
         lp.x = cat.x.roundToInt()
         lp.y = cat.y.roundToInt()

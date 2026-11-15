@@ -25,27 +25,31 @@ import kotlin.math.min
 @SuppressLint("ViewConstructor")
 class PreviewView(context: Context, private val onCaption: (String) -> Unit) : View(context) {
 
-    private class Act(val anim: Anim, val caption: String, val seconds: Float, val needs: Behavior?)
+    private class Act(val anim: Anim, val caption: String, val seconds: Float, val needs: Set<Behavior> = emptySet())
 
+    // the same order as on screen: grooming and scratching now and then, a yawn before a nap,
+    // and a stretch once she wakes up
     private val acts = listOf(
-        Act(Anim.IDLE, "Watching you", 3.5f, null),
-        Act(Anim.LICK, "Licking her paw", 2.5f, Behavior.GROOM),
-        Act(Anim.WASH, "Washing her face", 2f, Behavior.GROOM),
-        Act(Anim.YAWN, "Yawning", 2.4f, Behavior.YAWN),
-        Act(Anim.IDLE, "Watching you", 2.5f, null),
-        Act(Anim.STRETCH, "Stretching", 3.4f, Behavior.STRETCH),
-        Act(Anim.SCRATCH, "Scratching an ear", 1.8f, Behavior.SCRATCH),
-        Act(Anim.WATCH, "Eyeing a ball of wool", 2.5f, Behavior.BALL),
-        Act(Anim.SWAT, "Batting the ball", 1.2f, Behavior.BALL),
-        Act(Anim.SLEEP, "Napping", 4f, Behavior.NAP),
+        Act(Anim.IDLE, "Watching you", 3.5f),
+        Act(Anim.LICK, "Licking her paw", 2.5f, setOf(Behavior.GROOM)),
+        Act(Anim.WASH, "Washing her face", 2f, setOf(Behavior.GROOM)),
+        Act(Anim.IDLE, "Watching you", 3f),
+        Act(Anim.SCRATCH, "Scratching an ear", 1.8f, setOf(Behavior.SCRATCH)),
+        Act(Anim.IDLE, "Getting sleepy", 2.5f, setOf(Behavior.NAP)),
+        Act(Anim.YAWN, "Yawning", 2.4f, setOf(Behavior.YAWN)),
+        Act(Anim.SLEEP, "Napping", 4.5f, setOf(Behavior.NAP)),
+        Act(Anim.STRETCH, "Waking with a stretch", 3.4f, setOf(Behavior.NAP, Behavior.STRETCH)),
+        Act(Anim.IDLE, "Watching you", 3f),
+        Act(Anim.WATCH, "Eyeing a ball of wool", 2.5f, setOf(Behavior.BALL)),
+        Act(Anim.SWAT, "Batting the ball", 1.2f, setOf(Behavior.BALL)),
     )
-    private val pet = Act(Anim.PET, "Purring", 1.8f, null)
+    private val pet = Act(Anim.PET, "Purring", 1.8f)
 
     /** The behaviours switched on; the preview only shows those. */
     var enabled: Set<Behavior> = Behavior.entries.toSet()
         set(value) {
             field = value
-            if (current.needs != null && current.needs !in value) next()
+            if (!value.containsAll(current.needs)) next()
         }
 
     private var index = 0
@@ -84,7 +88,7 @@ class PreviewView(context: Context, private val onCaption: (String) -> Unit) : V
         do {
             index = (index + 1) % acts.size
             tries++
-        } while (acts[index].needs != null && acts[index].needs !in enabled && tries <= acts.size)
+        } while (!enabled.containsAll(acts[index].needs) && tries <= acts.size)
         play(acts[index])
     }
 

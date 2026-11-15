@@ -81,9 +81,24 @@ class CatBrain(
     var ballTimer = nextBallDelay()
         private set
 
-    /** Upcoming idle activities; every enabled one comes up once before any repeats. */
-    private val bag = ArrayList<Behavior>()
-    private var lastActivity: Behavior? = null
+    // Grooming and scratching are occasional: each has its own long rest before it can come up
+    // again, and any two of them are at least [specialGap] apart.
+    private var groomRest = 120f + rng.nextFloat() * 180f
+    private var scratchRest = 180f + rng.nextFloat() * 300f
+    private var yawnRest = 300f + rng.nextFloat() * 300f
+    private var specialGap = 120f + rng.nextFloat() * 120f
+
+    /** After waking from a nap she stays up this much longer before she can doze off again. */
+    private var napRest = 0f
+
+    /** The yawn under way is her settling down: sleep follows it. */
+    private var yawnThenSleep = false
+
+    /** The stretch under way follows a nap she woke from by herself. */
+    private var stretchAfterNap = false
+
+    /** She was carried and dropped; a cat often grooms after that. */
+    private var wasCarried = false
     private var swatCooldown = 0f
     private var playMoving = false
     private var poseHold = 0f
@@ -221,6 +236,11 @@ class CatBrain(
         val dt = dtSeconds.coerceIn(0f, 0.05f)
         stateTime += dt
         quietTime += dt
+        groomRest -= dt
+        scratchRest -= dt
+        yawnRest -= dt
+        specialGap -= dt
+        napRest -= dt
         updateBall(dt)
         // the floor rose above the cat (the keyboard opened): look up, then jump onto it
         if (y > standY + 1f && state != State.AIR && state != State.DRAG && state != State.ALERT) {
@@ -230,16 +250,21 @@ class CatBrain(
         when (state) {
             State.IDLE -> if (stateTime >= stateDur) {
                 when {
-                    calm -> if (can(Behavior.NAP) && rng.nextFloat() < 0.3f) nap() else enter(State.IDLE)
+                    calm -> if (can(Behavior.NAP) && rng.nextFloat() < 0.3f) settleDown() else sit()
                     playBall != null -> startPlay()
-                    can(Behavior.NAP) && quietTime > 40f && rng.nextFloat() < 0.5f -> nap()
-                    rng.nextFloat() < 0.7f -> startActivity()
-                    else -> enter(State.IDLE)
+                    can(Behavior.NAP) && quietTime > 60f && napRest <= 0f && rng.nextFloat() < 0.4f -> settleDown()
+                    else -> pickSomething()
                 }
             }
             State.WALK -> if (moveToward(walkTo, 0.8f * size * dt)) enter(State.IDLE)
-            State.GROOM, State.STRETCH, State.YAWN, State.SCRATCH ->
-                if (stateTime >= stateDur) enter(State.IDLE, 1f + rng.nextFloat() * 3f)
+            State.YAWN -> if (stateTime >= stateDur) {
+                if (yawnThenSleep && can(Behavior.NAP)) nap() else sit()
+            }
+            State.STRETCH -> if (stateTime >= stateDur) {
+                // fully awake now; she sometimes tidies her fur before getting on with the day
+                if (stretchAfterNap && can(Behavior.GROOM) && groomRest <= 0f && rng.nextFloat() < 0.4f) groom() else sit()
+            }
+            State.GROOM, State.SCRATCH -> if (stateTime >= stateDur) sit()
             State.ALERT -> if (stateTime >= stateDur) {
                 when {
                     y > standY + 1f -> {
@@ -258,10 +283,29 @@ class CatBrain(
             State.CHASE -> chase(dt)
             State.AIR -> fly(dt)
             State.LAND -> if (stateTime >= 0.25f) {
-                if (playBall != null && !calm) startPlay() else enter(State.IDLE)
+                val carried = wasCarried
+                wasCarried = false
+                when {
+                    playBall != null && !calm -> startPlay()
+                    // put down after being carried: smooth her ruffled fur
+                    carried && can(Behavior.GROOM) && groomRest <= 0f && rng.nextFloat() < 0.35f -> groom()
+                    else -> enter(State.IDLE)
+                }
             }
             State.PET -> if (stateTime >= 1.6f) enter(State.IDLE)
-            State.SLEEP -> if (stateTime >= stateDur) enter(State.IDLE)
+            // she woke up by herself (a touch, the keyboard or a ball wake her through other
+            // states): only then does she stretch
+            State.SLEEP -> if (stateTime >= stateDur) {
+                quietTime = 0f
+                napRest = 300f + rng.nextFloat() * 300f
+                specialGap = specialGap.coerceAtLeast(120f + rng.nextFloat() * 60f)
+                if (can(Behavior.STRETCH)) {
+                    stretchAfterNap = true
+                    enter(State.STRETCH, Anim.STRETCH.frames / Anim.STRETCH.fps)
+                } else {
+                    sit()
+                }
+            }
             State.DRAG -> Unit
         }
     }
@@ -295,6 +339,14 @@ class CatBrain(
         enter(State.PET)
     }
 
+    /** Arrive by dropping in from [height] px above the floor. */
+    fun dropIn(height: Float) {
+        y = (standY - height).coerceAtLeast(0f)
+        vx = 0f
+        vy = 0f
+        enterAir()
+    }
+
     fun dragStart() {
         quietTime = 0f
         enter(State.DRAG)
@@ -309,6 +361,7 @@ class CatBrain(
     /** Let go, optionally with a fling velocity in px/s. */
     fun dragEnd(velX: Float, velY: Float) {
         if (state != State.DRAG) return
+        wasCarried = true
         val cap = 40f * size
         vx = velX.coerceIn(-cap, cap)
         vy = velY.coerceIn(-cap, cap)
@@ -321,45 +374,59 @@ class CatBrain(
             vy = 0f
         }
         if (next != State.ALERT && next != State.CHASE) hasTarget = false
+        // a touch or a wake-up in the middle breaks the sequence
+        if (next != State.YAWN) yawnThenSleep = false
+        if (next != State.STRETCH) stretchAfterNap = false
         state = next
         stateTime = 0f
         stateDur = duration
     }
 
-    private fun nap() = enter(State.SLEEP, 40f + rng.nextFloat() * 80f)
+    /** A proper cat nap: four to twelve minutes, unless something wakes her. */
+    private fun nap() = enter(State.SLEEP, 240f + rng.nextFloat() * 480f)
 
-    /** Do the next thing from the bag: wander, groom, stretch, yawn or scratch. */
-    private fun startActivity() {
-        val next = nextActivity() ?: return enter(State.IDLE)
-        lastActivity = next
-        when (next) {
-            Behavior.WANDER -> {
-                walkTo = rng.nextFloat() * maxX
-                enter(State.WALK)
-            }
-            Behavior.GROOM -> enter(State.GROOM, 4f + rng.nextFloat() * 3f)
-            Behavior.STRETCH -> enter(State.STRETCH, Anim.STRETCH.frames / Anim.STRETCH.fps)
-            Behavior.YAWN -> enter(State.YAWN, Anim.YAWN.frames / Anim.YAWN.fps)
-            Behavior.SCRATCH -> enter(State.SCRATCH, 1.5f + rng.nextFloat() * 1.2f)
-            else -> enter(State.IDLE)
+    /** Sit for a good while; most of a cat's day is spent doing nothing in particular. */
+    private fun sit() = enter(State.IDLE, 5f + rng.nextFloat() * 10f)
+
+    /** Getting sleepy: a yawn first, then curl up. */
+    private fun settleDown() {
+        if (can(Behavior.YAWN)) {
+            yawnThenSleep = true
+            yawnRest = 120f + rng.nextFloat() * 180f
+            enter(State.YAWN, Anim.YAWN.frames / Anim.YAWN.fps)
+        } else {
+            nap()
         }
     }
 
-    private fun nextActivity(): Behavior? {
-        bag.removeAll { !can(it) }
-        if (bag.isEmpty()) {
-            val fresh = ArrayList<Behavior>()
-            for (b in Behavior.ACTIVITIES) if (can(b)) {
-                fresh.add(b)
-                if (b == Behavior.WANDER) fresh.add(b) // she walks about more often than she stretches
+    private fun groom() {
+        groomRest = 480f + rng.nextFloat() * 420f
+        specialGap = 120f + rng.nextFloat() * 120f
+        enter(State.GROOM, 4f + rng.nextFloat() * 3f)
+    }
+
+    /** After sitting a while: usually stroll somewhere or keep sitting, now and then something more. */
+    private fun pickSomething() {
+        val special = specialGap <= 0f
+        when {
+            special && can(Behavior.GROOM) && groomRest <= 0f && rng.nextFloat() < 0.3f -> groom()
+            special && can(Behavior.SCRATCH) && scratchRest <= 0f && rng.nextFloat() < 0.25f -> {
+                scratchRest = 600f + rng.nextFloat() * 600f
+                specialGap = 120f + rng.nextFloat() * 120f
+                enter(State.SCRATCH, 1.5f + rng.nextFloat() * 1.2f)
             }
-            if (fresh.isEmpty()) return null
-            fresh.shuffle(rng)
-            // don't do the same thing twice in a row across a refill
-            if (fresh.size > 1 && fresh.last() == lastActivity) fresh.add(0, fresh.removeAt(fresh.size - 1))
-            bag.addAll(fresh)
+            // without naps, a yawn still comes now and then on its own
+            special && !can(Behavior.NAP) && can(Behavior.YAWN) && yawnRest <= 0f && rng.nextFloat() < 0.2f -> {
+                yawnRest = 300f + rng.nextFloat() * 300f
+                specialGap = 120f + rng.nextFloat() * 120f
+                enter(State.YAWN, Anim.YAWN.frames / Anim.YAWN.fps)
+            }
+            can(Behavior.WANDER) && rng.nextFloat() < 0.55f -> {
+                walkTo = rng.nextFloat() * maxX
+                enter(State.WALK)
+            }
+            else -> sit()
         }
-        return bag.removeAt(bag.size - 1)
     }
 
     private fun updateBall(dt: Float) {

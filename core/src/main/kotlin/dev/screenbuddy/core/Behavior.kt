@@ -8,9 +8,10 @@ enum class Behavior {
     /** Lick a paw, then wash the face with it. */
     GROOM,
 
-    /** A long, slow stretch. */
+    /** A long, slow stretch, only on waking from a nap by herself. */
     STRETCH,
 
+    /** Yawn before settling down to sleep (now and then on its own if naps are off). */
     YAWN,
 
     /** Scratch behind an ear with a hind leg. */
@@ -26,10 +27,5 @@ enum class Behavior {
     NOTICE,
 
     /** Jump onto the on-screen keyboard while it is open. Handled by the app, which owns the floor. */
-    KEYBOARD;
-
-    companion object {
-        /** What she picks from while sitting around; each comes up once before any repeats. */
-        val ACTIVITIES = listOf(WANDER, GROOM, STRETCH, YAWN, SCRATCH)
-    }
+    KEYBOARD,
 }

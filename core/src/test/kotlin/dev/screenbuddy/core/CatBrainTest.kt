@@ -186,7 +186,9 @@ class CatBrainTest {
             b.onNotice()
             b.run(120f) {
                 assertEquals(x0, it.x, 0.5f, "seed $seed moved while calm")
-                val still = it.state == CatBrain.State.IDLE || it.state == CatBrain.State.SLEEP
+                val still = it.state == CatBrain.State.IDLE || it.state == CatBrain.State.SLEEP ||
+                    it.state == CatBrain.State.YAWN || it.state == CatBrain.State.STRETCH ||
+                    it.state == CatBrain.State.GROOM || it.state == CatBrain.State.SCRATCH
                 assertTrue(still, "seed $seed was ${it.state} while calm")
             }
             // she still lets herself be petted, and gets lively again afterwards
@@ -263,24 +265,71 @@ class CatBrainTest {
         assertTrue(b.state != CatBrain.State.PLAY)
     }
 
+    /** Every state change as (time, from, to) over [seconds] of simulated time. */
+    private fun CatBrain.transitions(seconds: Float, each: (Float, CatBrain) -> Unit = { _, _ -> }): List<Triple<Float, CatBrain.State, CatBrain.State>> {
+        val out = ArrayList<Triple<Float, CatBrain.State, CatBrain.State>>()
+        var t = 0f
+        var last = state
+        while (t < seconds) {
+            update(1f / 30f)
+            t += 1f / 30f
+            if (state != last) {
+                out.add(Triple(t, last, state))
+                last = state
+            }
+            each(t, this)
+        }
+        return out
+    }
+
     @Test
-    fun cyclesThroughEveryActivity() {
-        val wanted = setOf(
-            CatBrain.State.WALK, CatBrain.State.GROOM, CatBrain.State.STRETCH,
-            CatBrain.State.YAWN, CatBrain.State.SCRATCH,
-        )
+    fun yawnsBeforeEveryNapAndStretchesOnlyAfterWakingByHerself() {
         for (seed in 1..5) {
             val b = brain(seed)
-            val seen = HashSet<CatBrain.State>()
-            // keep her awake: someone is touching the screen now and then
+            val log = b.transitions(7200f) { _, it -> assertInBounds(it) }
+            val naps = log.filter { it.third == CatBrain.State.SLEEP }
+            val stretches = log.filter { it.third == CatBrain.State.STRETCH }
+            assertTrue(naps.size >= 2, "seed $seed napped only ${naps.size} times in two hours")
+            assertTrue(stretches.isNotEmpty(), "seed $seed never stretched")
+            for (n in naps) assertEquals(CatBrain.State.YAWN, n.second, "seed $seed slept without yawning first")
+            for (st in stretches) assertEquals(CatBrain.State.SLEEP, st.second, "seed $seed stretched without a nap")
+        }
+    }
+
+    @Test
+    fun doesNotStretchWhenWokenByATouch() {
+        for (seed in 1..5) {
+            val b = brain(seed)
             var t = 0f
-            b.run(240f) {
-                t += 1f / 60f
-                seen.add(it.state)
-                if (t > 20f) { it.onNotice(); t = 0f }
-                assertInBounds(it)
+            while (b.state != CatBrain.State.SLEEP && t < 3600f) {
+                b.update(1f / 30f)
+                t += 1f / 30f
             }
-            assertTrue(seen.containsAll(wanted), "seed $seed only did $seen")
+            assertEquals(CatBrain.State.SLEEP, b.state)
+            b.onPet()
+            val log = b.transitions(60f)
+            assertTrue(log.none { it.third == CatBrain.State.STRETCH }, "seed $seed stretched after being woken")
+        }
+    }
+
+    @Test
+    fun groomingAndScratchingAreOccasional() {
+        for (seed in 1..5) {
+            val b = brain(seed)
+            val log = b.transitions(7200f)
+            val specials = log.filter {
+                // a groom straight after a stretch is part of waking up, not a separate event
+                (it.third == CatBrain.State.GROOM && it.second != CatBrain.State.STRETCH) ||
+                    it.third == CatBrain.State.SCRATCH
+            }
+            val grooms = log.count { it.third == CatBrain.State.GROOM }
+            val scratches = log.count { it.third == CatBrain.State.SCRATCH }
+            assertTrue(grooms in 1..20, "seed $seed groomed $grooms times in two hours")
+            assertTrue(scratches in 1..14, "seed $seed scratched $scratches times in two hours")
+            for (i in 1 until specials.size) {
+                val gap = specials[i].first - specials[i - 1].first
+                assertTrue(gap >= 115f, "seed $seed: only ${gap}s between ${specials[i - 1].third} and ${specials[i].third}")
+            }
         }
     }
 
@@ -305,9 +354,9 @@ class CatBrainTest {
     @Test
     fun newAnimationsHoldTheirLastFrameAndLoopWhereTheyShould() {
         val b = brain()
-        b.enabled = setOf(Behavior.STRETCH)
+        b.enabled = setOf(Behavior.STRETCH, Behavior.NAP)
         var maxFrame = 0
-        b.run(120f) {
+        b.run(1800f) {
             if (it.anim == Anim.STRETCH) {
                 assertTrue(it.frame < Anim.STRETCH.frames)
                 maxFrame = maxOf(maxFrame, it.frame)

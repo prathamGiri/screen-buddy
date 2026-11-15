@@ -3,8 +3,9 @@
 A pixel companion that lives on top of your Android screen. Today that is Marmalade, a ginger
 tabby; dogs and bunnies are planned.
 
-She wanders along the bottom edge, grooms herself, stretches, yawns, scratches behind her ear,
-hops onto the keyboard while you type, and naps when you leave her alone. Tap her to pet her,
+She wanders along the bottom edge, now and then grooms herself or scratches behind her ear,
+hops onto the keyboard while you type, and when you leave her alone she yawns, naps, and wakes
+with a stretch. Tap her to pet her,
 drag her to carry her, and let go mid-swipe to toss her. Every hour or two of screen time a
 ball of wool rolls in; she plays with it for a minute or two, then bats it off the screen.
 
@@ -32,8 +33,9 @@ only learns that the screen was touched, not where.
 - `core/` – plain Kotlin, with unit tests:
   - `Sprites.kt` – every frame, drawn in code. The sprite test writes a preview sheet to
     `core/build/sprites.png`.
-  - `CatBrain.kt` – behaviour and physics. Idle activities come from a shuffled bag, so each
-    enabled one comes up before any repeats.
+  - `CatBrain.kt` – behaviour and physics. She follows a routine: mostly sitting and
+    strolling, an occasional groom or ear scratch, a yawn before every nap, and a stretch only
+    when she wakes from a nap by herself.
   - `Behavior.kt` – the behaviours the user can switch off.
   - `Species.kt` – the companions the app knows about; only the cat is available so far.
 - `app/` – Android:
